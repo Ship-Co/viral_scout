@@ -41,18 +41,6 @@ npm run scout     # posts to Slack when it is 09:00 Amsterdam
 
 The live deployment uses Vercel cron. Two UTC slots handle Amsterdam daylight saving time; each endpoint checks the date and exactly one performs the scan.
 
-The included GitHub Actions workflow is an alternative if you prefer running it from GitHub.
-
-### GitHub Actions alternative
-
-Push this folder to a private GitHub repository and add three repository secrets under Settings → Secrets and variables → Actions:
-
-- `X_AUTH_TOKEN`
-- `X_CT0`
-- `SLACK_WEBHOOK_URL`
-
-The workflow has winter and summer UTC schedules. It identifies which one represents 09:00 Amsterdam on that date, so exactly one sends even if GitHub starts it late. You can also run it manually from the Actions tab.
-
 ## Tuning
 
 - `LAUNCH_HANDLES`: accounts allowed to originate a launch.
