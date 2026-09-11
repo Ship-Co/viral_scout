@@ -143,3 +143,56 @@ test("does not mistake commentary about the launch company shipping for a builde
   const result = findFire([launch, commentary], { now, launchHandles: handles });
   assert.equal(result[0].builders.length, 0);
 });
+
+test("keeps distinct launches that both mention agents", () => {
+  const agentsApi = tweet({
+    id: "agents-api",
+    author: "OpenAIDevs",
+    text: "The Agents API is now available in public beta for developers.",
+    createdAt: "2026-09-10T11:00:00.000Z",
+    metrics: { likes: 3500, reposts: 400, replies: 200, quotes: 180, bookmarks: 3700, views: 1_100_000 },
+  });
+  const cursorProjects = tweet({
+    id: "cursor-projects",
+    author: "cursor_ai",
+    text: "Introducing Projects, a new way of working in Cursor with a coordinator agent and subagents in one persistent thread.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 9000, reposts: 500, replies: 400, quotes: 300, bookmarks: 3900, views: 1_400_000 },
+  });
+  const result = findFire([agentsApi, cursorProjects], { now, launchHandles: handles });
+  assert.deepEqual(new Set(result.map((item) => item.launch.id)), new Set(["agents-api", "cursor-projects"]));
+});
+
+test("finds a high-signal self-announced model launch from the monitored feeds", () => {
+  const independentLaunch = tweet({
+    id: "persimmon",
+    author: "humansand",
+    text: "Today we're introducing Persimmon, a large-scale model and open API for simulating conversation.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 1200, reposts: 150, replies: 80, quotes: 70, bookmarks: 500, views: 399000 },
+  });
+  const result = findFire([independentLaunch], { now, launchHandles: handles });
+  assert.equal(result[0].launch.id, "persimmon");
+});
+
+test("does not treat joining an open-source foundation as a technology launch", () => {
+  const membership = tweet({
+    id: "foundation",
+    author: "perplexitydevs",
+    text: "Perplexity has joined the Rust Foundation. We support people who build reliable open-source software.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 1000, reposts: 100, replies: 30, quotes: 20, bookmarks: 100, views: 150000 },
+  });
+  assert.equal(findFire([membership], { now, launchHandles: new Set(["perplexitydevs"]) }).length, 0);
+});
+
+test("does not surface an unknown model announcement without a public access path", () => {
+  const inaccessible = tweet({
+    id: "closed-model",
+    author: "newlab",
+    text: "Today we're introducing Persimmon, a large-scale model that simulates conversation.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 1200, reposts: 150, replies: 80, quotes: 70, bookmarks: 500, views: 399000 },
+  });
+  assert.equal(findFire([inaccessible], { now, launchHandles: handles }).length, 0);
+});

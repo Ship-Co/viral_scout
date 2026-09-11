@@ -1,6 +1,8 @@
 const LAUNCH_WORDS = /\b(launch(?:ed|ing)?|introduc(?:e|ed|ing)|releas(?:e|ed|ing)|available|rolling out|now supports?|open[- ]source(?:d)?|api|sdk|model|plugin|agent|tool|beta|preview)\b/i;
-const LAUNCH_ACTION_WORDS = /\b(introducing|announc(?:e|ed|ing)|now available|is now available|available today|launch(?:ed|ing)?|releas(?:e|ed|ing)|rolling out|now supports?|open[- ]sourc(?:e|ed|ing)|public beta|developer preview|now in the api)\b/i;
-const BUILDABLE_WORDS = /\b(api|sdk|model|open[- ]source|github|plugin|mcp|download|weights|checkpoint|developers?)\b/i;
+const LAUNCH_ACTION_WORDS = /\b(introducing|announc(?:e|ed|ing)|now available|is now available|available today|launch(?:ed|ing)?|releas(?:e|ed|ing)|rolling out|now supports?|open[- ]sourc(?:ed|ing)|public beta|developer preview|now in the api|fresh updates?|we(?:'ve| have) added)\b/i;
+const OWNED_LAUNCH_WORDS = /(?:^|\b)(?:today,?\s*)?(?:we(?:'re| are| have|'ve)?|i(?:'m| am| have|'ve)?)\s+(?:just\s+)?(?:introduc(?:e|ed|ing)|announc(?:e|ed|ing)|launch(?:ed|ing)?|releas(?:e|ed|ing)|open[- ]sourc(?:e|ed|ing)|shipp(?:ed|ing))\b|^introducing\b/i;
+const BUILDABLE_WORDS = /\b(api|sdk|cli|model|open[- ]source|github|plugin|mcp|download|weights|checkpoint|developers?|agents?|agent harness|managed agents?)\b/i;
+const PUBLIC_ACCESS_WORDS = /\b(api|sdk|cli|open[- ]sourc(?:e|ed)|github|plugin|mcp|download|weights|checkpoint|developers?|public beta|available|rolling out)\b/i;
 const OWN_BUILD_WORDS = /\b(i|we|my|our)\b.{0,45}\b(built|made|created|shipped|shipping|launched|prototype[dd]?|experiment(?:ed|ing)?)\b|\b(i|we)\W*(?:'ve|have|just)?\s*(built|made|created|shipped|launched)\b/i;
 const BUILD_ARTIFACT_WORDS = /\b(built with|made with|powered by|demo(?: of)?|prototype|weekend project|using .{0,30}(api|model|sdk|mcp))\b/i;
 const PROMOTIONAL_WORDS = /\b(you can build|lets? (?:you|developers) build|everyone build|start building|build your own)\b/i;
@@ -89,9 +91,12 @@ export function findFire(tweets, options = {}) {
   const launches = tweets
     .filter((tweet) => {
       const age = ageHours(tweet, now);
+      const officialLaunchAccount = launchHandles.has(tweet.author?.toLowerCase());
+      const selfAnnouncedPublicLaunch =
+        OWNED_LAUNCH_WORDS.test(tweet.text) && PUBLIC_ACCESS_WORDS.test(tweet.text);
       return (
         tweet.author &&
-        launchHandles.has(tweet.author.toLowerCase()) &&
+        (officialLaunchAccount || selfAnnouncedPublicLaunch) &&
         age >= minAge &&
         age <= maxAge &&
         !tweet.isReply &&
@@ -112,9 +117,12 @@ export function findFire(tweets, options = {}) {
 
   const deduped = [];
   for (const launch of launches) {
-    const overlaps = deduped.some((existing) =>
-      launch.tokens.some((token) => existing.tokens.includes(token))
-    );
+    const overlaps = deduped.some((existing) => {
+      if (launch.phrases.some((phrase) => existing.phrases.includes(phrase))) return true;
+      const shared = launch.tokens.filter((token) => existing.tokens.includes(token));
+      const smaller = Math.max(1, Math.min(launch.tokens.length, existing.tokens.length));
+      return shared.length >= 3 && shared.length / smaller >= 0.5;
+    });
     if (!overlaps) deduped.push(launch);
     if (deduped.length >= maxItems) break;
   }

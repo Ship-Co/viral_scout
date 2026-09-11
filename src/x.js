@@ -4,25 +4,59 @@ const WEB_BEARER_TOKEN =
 
 const FEATURES = {
   rweb_video_screen_enabled: false,
+  rweb_cashtags_enabled: true,
+  profile_label_improvements_pcf_label_in_post_enabled: true,
+  responsive_web_profile_redirect_enabled: false,
   rweb_tipjar_consumption_enabled: true,
   responsive_web_graphql_exclude_directive_enabled: true,
   verified_phone_label_enabled: false,
   responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
   responsive_web_graphql_timeline_navigation_enabled: true,
   creator_subscriptions_tweet_preview_api_enabled: true,
+  premium_content_api_read_enabled: false,
+  communities_web_enable_tweet_community_results_fetch: true,
+  c9s_tweet_anatomy_moderator_badge_enabled: true,
+  responsive_web_grok_analyze_button_fetch_trends_enabled: false,
+  responsive_web_grok_analyze_post_followups_enabled: true,
+  rweb_cashtags_composer_attachment_enabled: true,
+  responsive_web_jetfuel_frame: true,
+  rweb_sports_post_context_enabled: true,
+  responsive_web_grok_share_attachment_enabled: true,
+  responsive_web_grok_annotations_enabled: true,
+  articles_preview_enabled: true,
   tweetypie_unmention_optimization_enabled: true,
   responsive_web_edit_tweet_api_enabled: true,
+  rweb_conversational_replies_downvote_enabled: false,
   graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
   view_counts_everywhere_api_enabled: true,
   longform_notetweets_consumption_enabled: true,
   responsive_web_twitter_article_tweet_consumption_enabled: true,
+  content_disclosure_indicator_enabled: true,
+  content_disclosure_ai_generated_indicator_enabled: true,
+  responsive_web_grok_show_grok_translated_post: true,
+  responsive_web_grok_analysis_button_from_backend: true,
+  post_ctas_fetch_enabled: true,
   tweet_awards_web_tipping_enabled: false,
   freedom_of_speech_not_reach_fetch_enabled: true,
   standardized_nudges_misinfo: true,
   tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
   longform_notetweets_rich_text_read_enabled: true,
   longform_notetweets_inline_media_enabled: true,
+  responsive_web_grok_image_annotation_enabled: true,
+  responsive_web_grok_imagine_annotation_enabled: true,
+  responsive_web_grok_community_note_auto_translation_is_enabled: true,
   responsive_web_enhance_cards_enabled: false,
+};
+
+const FIELD_TOGGLES = {
+  withPayments: false,
+  withAuxiliaryUserLabels: false,
+  withArticleRichContentState: false,
+  withArticlePlainText: false,
+  withArticleSummaryText: false,
+  withArticleVoiceOver: false,
+  withGrokAnalyze: false,
+  withDisallowedReplyControls: false,
 };
 
 function headers() {
@@ -47,6 +81,7 @@ async function graphql(operation, queryId, variables) {
   const params = new URLSearchParams({
     variables: JSON.stringify(variables),
     features: JSON.stringify(FEATURES),
+    fieldToggles: JSON.stringify(FIELD_TOGGLES),
   });
   const response = await fetch(`${X_GRAPHQL_BASE}/${queryId}/${operation}?${params}`, {
     headers: headers(),
@@ -122,8 +157,8 @@ function tweetsFromInstructions(instructions, source) {
 }
 
 async function fetchUserTimeline(handle, cutoff) {
-  const userQueryId = process.env.X_USER_QUERY_ID || "NimuplG1OB7Fd2btCLdBOw";
-  const tweetsQueryId = process.env.X_USER_TWEETS_QUERY_ID || "QWF3SzpHmykQHsQMixG0cg";
+  const userQueryId = process.env.X_USER_QUERY_ID || "KybxDj9RrADIITXlGG8kpw";
+  const tweetsQueryId = process.env.X_USER_TWEETS_QUERY_ID || "OeFjWKHutsuyWXZGmLr02A";
   const userData = await graphql("UserByScreenName", userQueryId, {
     screen_name: handle,
     withSafetyModeUserFields: true,
@@ -157,6 +192,7 @@ async function fetchTimeline({ endpoint, queryId, variables, source, maxPages, c
     const params = new URLSearchParams({
       variables: JSON.stringify(pageVariables),
       features: JSON.stringify(FEATURES),
+      fieldToggles: JSON.stringify(FIELD_TOGGLES),
     });
     const url = `${X_GRAPHQL_BASE}/${queryId}/${endpoint}?${params}`;
     const response = await fetch(url, { headers: headers() });
@@ -192,14 +228,14 @@ async function fetchTimeline({ endpoint, queryId, variables, source, maxPages, c
   return collected;
 }
 
-export async function fetchAllTweets({ listIds, launchHandles, lookbackHours }) {
+export async function fetchAllTweets({ listIds, launchHandles, directHandles, lookbackHours }) {
   const cutoff = Date.now() - lookbackHours * 60 * 60 * 1000;
-  const listQueryId = process.env.X_LIST_QUERY_ID || "Uv3buKIUElzL3Iuc0L0O5g";
+  const listQueryId = process.env.X_LIST_QUERY_ID || "u6PUF1835XGBkf6MQZUV8A";
   const homeQueryId = process.env.X_HOME_QUERY_ID || "nn16KxqX3E1OdE7WlHB5LA";
   const followingQueryId = process.env.X_FOLLOWING_QUERY_ID || "Odyc0iCUHiGTk7LkJLGvyQ";
 
   const jobs = [
-    ...[...(launchHandles || [])].map((handle) => fetchUserTimeline(handle, cutoff)),
+    ...[...(directHandles || [])].map((handle) => fetchUserTimeline(handle, cutoff)),
     ...listIds.map((listId, index) =>
       fetchTimeline({
         endpoint: "ListLatestTweetsTimeline",
