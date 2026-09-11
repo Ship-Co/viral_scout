@@ -124,3 +124,22 @@ test("does not call low-signal promotional commentary a shipped build", () => {
   const result = findFire([launch, promo], { now, launchHandles: handles });
   assert.equal(result[0].builders.length, 0);
 });
+
+test("does not mistake commentary about the launch company shipping for a builder project", () => {
+  const launch = tweet({
+    id: "agents",
+    author: "OpenAIDevs",
+    text: "Go from idea to a working agent faster with the Agents API, now available in public beta.",
+    createdAt: "2026-09-10T11:00:00.000Z",
+    metrics: { likes: 3500, reposts: 400, replies: 200, quotes: 180, bookmarks: 3700, views: 1_100_000 },
+  });
+  const commentary = tweet({
+    id: "commentary",
+    author: "commentator",
+    text: "This is the AWS moment for agents. OpenAI just shipped the Agents API, and everything that made agents hard is changing.",
+    hasMedia: true,
+    metrics: { likes: 500, reposts: 30, replies: 20, quotes: 10, bookmarks: 100, views: 50000 },
+  });
+  const result = findFire([launch, commentary], { now, launchHandles: handles });
+  assert.equal(result[0].builders.length, 0);
+});

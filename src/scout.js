@@ -1,7 +1,8 @@
 const LAUNCH_WORDS = /\b(launch(?:ed|ing)?|introduc(?:e|ed|ing)|releas(?:e|ed|ing)|available|rolling out|now supports?|open[- ]source(?:d)?|api|sdk|model|plugin|agent|tool|beta|preview)\b/i;
 const LAUNCH_ACTION_WORDS = /\b(introducing|announc(?:e|ed|ing)|now available|is now available|available today|launch(?:ed|ing)?|releas(?:e|ed|ing)|rolling out|now supports?|open[- ]sourc(?:e|ed|ing)|public beta|developer preview|now in the api)\b/i;
 const BUILDABLE_WORDS = /\b(api|sdk|model|open[- ]source|github|plugin|mcp|download|weights|checkpoint|developers?)\b/i;
-const SHIPPING_WORDS = /\b(i built|we built|i made|we made|built with|made with|just shipped|shipping|demo(?: of)?|prototype|experiment|using .{0,30}(api|model|sdk|mcp)|weekend project|just made|just built)\b/i;
+const OWN_BUILD_WORDS = /\b(i|we|my|our)\b.{0,45}\b(built|made|created|shipped|shipping|launched|prototype[dd]?|experiment(?:ed|ing)?)\b|\b(i|we)\W*(?:'ve|have|just)?\s*(built|made|created|shipped|launched)\b/i;
+const BUILD_ARTIFACT_WORDS = /\b(built with|made with|powered by|demo(?: of)?|prototype|weekend project|using .{0,30}(api|model|sdk|mcp))\b/i;
 const PROMOTIONAL_WORDS = /\b(you can build|lets? (?:you|developers) build|everyone build|start building|build your own)\b/i;
 const STOP = new Set("the a an and or for to of in on with is are now new our your you we i this that from by as at it its introducing launch launched available model api sdk beta preview today just can use using build built open source".split(" "));
 
@@ -126,7 +127,7 @@ export function findFire(tweets, options = {}) {
         return (
           age >= 0 &&
           age <= maxAge &&
-          SHIPPING_WORDS.test(tweet.text) &&
+          (OWN_BUILD_WORDS.test(tweet.text) || (tweet.hasMedia && BUILD_ARTIFACT_WORDS.test(tweet.text))) &&
           !PROMOTIONAL_WORDS.test(tweet.text) &&
           isBuilderHot(tweet, now) &&
           relatesTo(tweet, launch)
