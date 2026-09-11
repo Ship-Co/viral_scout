@@ -1,0 +1,14 @@
+{
+  "name": "fire-scout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scout": "node --env-file-if-exists=.env src/run.js",
+    "dry-run": "node --env-file-if-exists=.env src/run.js --dry-run --force",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

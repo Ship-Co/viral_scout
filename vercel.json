@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron-summer",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron-winter",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
