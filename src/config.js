@@ -24,4 +24,5 @@ export const config = {
   lookbackHours: Number(process.env.LOOKBACK_HOURS || 24),
   minAgeHours: Number(process.env.MIN_AGE_HOURS || 1),
   maxReportItems: Number(process.env.MAX_REPORT_ITEMS || 3),
+  digestHourAmsterdam: Number(process.env.DIGEST_HOUR_AMSTERDAM || 18),
 };

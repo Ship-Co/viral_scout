@@ -7,11 +7,11 @@
   "crons": [
     {
       "path": "/api/cron-summer",
-      "schedule": "0 7 * * *"
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron-winter",
-      "schedule": "0 8 * * *"
+      "schedule": "0 17 * * *"
     }
   ]
 }

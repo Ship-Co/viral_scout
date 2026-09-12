@@ -1,6 +1,6 @@
 # Fire Scout
 
-A small daily monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines directly through a burner account's normal web session, uses wider AI lists and feeds to find related builder posts, and sends one concise report to Slack at 09:00 Europe/Amsterdam.
+A small daily monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines directly through a burner account's normal web session, uses wider AI lists and feeds to find related builder posts, and sends one concise report to Slack at 18:00 Europe/Amsterdam (09:00 Pacific / 12:00 Eastern during the common daylight-saving period).
 
 It does not use the paid X API.
 
@@ -18,7 +18,7 @@ People shipping
   https://x.com/.../status/...
 ```
 
-If nothing clears the fire threshold, the scout stays silent. The report never adds build ideas.
+If nothing clears the fire threshold, the scout says so instead of fabricating a weak item. The report never adds build ideas.
 
 ## What you need
 
@@ -34,12 +34,14 @@ cp .env.example .env
 # fill the three values above
 npm test
 npm run dry-run   # prints without posting to Slack
-npm run scout     # posts to Slack when it is 09:00 Amsterdam
+npm run scout     # posts to Slack when it is 18:00 Amsterdam
 ```
 
 ## Run daily
 
 The live deployment uses Vercel cron. Two UTC slots handle Amsterdam daylight saving time; each endpoint checks the date and exactly one performs the scan.
+
+Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `18`.
 
 ## Tuning
 

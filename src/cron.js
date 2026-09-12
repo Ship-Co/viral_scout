@@ -9,7 +9,7 @@ export function isAuthorizedCron(request) {
   return request.headers.authorization === `Bearer ${secret}`;
 }
 
-function scheduledHourIsNine(utcHour) {
+function scheduledHourMatchesAmsterdam(utcHour, targetHour) {
   const today = new Date();
   const scheduledTime = new Date(Date.UTC(
     today.getUTCFullYear(),
@@ -22,11 +22,11 @@ function scheduledHourIsNine(utcHour) {
     hour: "2-digit",
     hour12: false,
   }).format(scheduledTime);
-  return localHour === "09";
+  return Number(localHour) === targetHour;
 }
 
 export async function runScheduledScout(utcHour) {
-  if (!scheduledHourIsNine(utcHour)) {
+  if (!scheduledHourMatchesAmsterdam(utcHour, config.digestHourAmsterdam)) {
     return { skipped: "daylight-saving slot", sent: false };
   }
 
@@ -38,12 +38,13 @@ export async function runScheduledScout(utcHour) {
     maxItems: config.maxReportItems,
   });
   const report = formatReport(items);
-  if (items.length > 0) await sendToSlack(report);
+  const coverageHealthy = errors.length <= 2;
+  if (coverageHealthy) await sendToSlack(report);
 
   return {
     scanned: tweets.length,
     sourceFailures: errors.length,
     qualifyingLaunches: items.length,
-    sent: items.length > 0,
+    sent: coverageHealthy,
   };
 }

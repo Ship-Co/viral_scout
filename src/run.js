@@ -6,7 +6,7 @@ import { sendToSlack } from "./slack.js";
 const dryRun = process.argv.includes("--dry-run");
 const force = process.argv.includes("--force") || process.env.FORCE_RUN === "1";
 
-function scheduledForAmsterdamNine() {
+function scheduledForAmsterdamHour(targetHour) {
   const schedule = process.env.CRON_SCHEDULE;
   if (!schedule) {
     const hour = new Intl.DateTimeFormat("en-GB", {
@@ -14,7 +14,7 @@ function scheduledForAmsterdamNine() {
       hour: "2-digit",
       hour12: false,
     }).format(new Date());
-    return hour === "09";
+    return Number(hour) === targetHour;
   }
 
   const utcHour = Number(schedule.split(" ")[1]);
@@ -31,12 +31,14 @@ function scheduledForAmsterdamNine() {
     hour: "2-digit",
     hour12: false,
   }).format(scheduledTime);
-  return localHour === "09";
+  return Number(localHour) === targetHour;
 }
 
 async function main() {
-  if (!force && !scheduledForAmsterdamNine()) {
-    console.log("Skipping: this schedule does not represent 09:00 in Europe/Amsterdam today.");
+  if (!force && !scheduledForAmsterdamHour(config.digestHourAmsterdam)) {
+    console.log(
+      `Skipping: this schedule does not represent ${String(config.digestHourAmsterdam).padStart(2, "0")}:00 in Europe/Amsterdam today.`
+    );
     return;
   }
 
