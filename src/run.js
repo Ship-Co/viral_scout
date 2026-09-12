@@ -52,9 +52,8 @@ async function main() {
   console.log(`\nScanned ${tweets.length} unique posts. ${errors.length} source(s) failed.`);
 
   const coverageHealthy = errors.length <= 2;
-  if (!dryRun && items.length > 0 && coverageHealthy) await sendToSlack(report);
-  if (!dryRun && items.length === 0) console.log("No Slack message sent because nothing qualified.");
-  if (!dryRun && items.length > 0 && !coverageHealthy) {
+  if (!dryRun && coverageHealthy) await sendToSlack(report);
+  if (!dryRun && !coverageHealthy) {
     console.log("No Slack message sent because source coverage was incomplete.");
   }
 }
