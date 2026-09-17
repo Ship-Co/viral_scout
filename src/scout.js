@@ -87,29 +87,43 @@ export function findFire(tweets, options = {}) {
   const maxAge = options.lookbackHours ?? 24;
   const maxItems = options.maxItems ?? 3;
   const launchHandles = options.launchHandles || new Set();
+  const decisions = options.decisions || new Map();
 
   const launches = tweets
     .filter((tweet) => {
       const age = ageHours(tweet, now);
+      const decision = decisions.get(tweet.id);
       const officialLaunchAccount = launchHandles.has(tweet.author?.toLowerCase());
       const selfAnnouncedPublicLaunch =
         OWNED_LAUNCH_WORDS.test(tweet.text) && PUBLIC_ACCESS_WORDS.test(tweet.text);
+      const reusableTechnology =
+        decision &&
+        ["model_or_api", "developer_tool", "creative_tool", "open_source"].includes(decision.technologyType);
+      const semanticLaunch =
+        decision &&
+        decision.rootLaunch >= 0.6 &&
+        decision.publicAccess >= 0.55 &&
+        reusableTechnology &&
+        decision.buildSurface >= 0.3;
+      const rulesLaunch =
+        (officialLaunchAccount || selfAnnouncedPublicLaunch) &&
+        LAUNCH_WORDS.test(tweet.text) &&
+        LAUNCH_ACTION_WORDS.test(tweet.text) &&
+        BUILDABLE_WORDS.test(tweet.text);
       return (
         tweet.author &&
-        (officialLaunchAccount || selfAnnouncedPublicLaunch) &&
         age >= minAge &&
         age <= maxAge &&
         !tweet.isReply &&
         !tweet.isQuote &&
-        LAUNCH_WORDS.test(tweet.text) &&
-        LAUNCH_ACTION_WORDS.test(tweet.text) &&
-        BUILDABLE_WORDS.test(tweet.text) &&
+        (decision ? semanticLaunch : rulesLaunch) &&
         isActuallyHot(tweet, now)
       );
     })
     .map((tweet) => ({
       ...tweet,
       momentum: momentum(tweet, now),
+      decision: decisions.get(tweet.id),
       tokens: topicTokens(tweet),
       phrases: topicPhrases(tweet),
     }))
@@ -132,11 +146,16 @@ export function findFire(tweets, options = {}) {
       .filter((tweet) => {
         if (!tweet.author || tweet.author.toLowerCase() === launch.author.toLowerCase()) return false;
         const age = ageHours(tweet, now);
+        const decision = decisions.get(tweet.id);
+        const semanticBuilder =
+          decision && decision.builderDemo >= 0.55 && decision.shippedArtifact >= 0.45;
+        const rulesBuilder =
+          OWN_BUILD_WORDS.test(tweet.text) || (tweet.hasMedia && BUILD_ARTIFACT_WORDS.test(tweet.text));
         return (
           age >= 0 &&
           age <= maxAge &&
-          (OWN_BUILD_WORDS.test(tweet.text) || (tweet.hasMedia && BUILD_ARTIFACT_WORDS.test(tweet.text))) &&
-          !PROMOTIONAL_WORDS.test(tweet.text) &&
+          (decision ? semanticBuilder : rulesBuilder) &&
+          (decision ? decision.commentary < 0.6 : !PROMOTIONAL_WORDS.test(tweet.text)) &&
           isBuilderHot(tweet, now) &&
           relatesTo(tweet, launch)
         );

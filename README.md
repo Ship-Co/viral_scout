@@ -1,6 +1,6 @@
 # Fire Scout
 
-A small daily monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines directly through a burner account's normal web session, uses wider AI lists and feeds to find related builder posts, and sends one concise report to Slack at 18:00 Europe/Amsterdam (09:00 Pacific / 12:00 Eastern during the common daylight-saving period).
+A small daily monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines directly through a burner account's normal web session, uses wider AI lists and feeds to find related builder posts, classifies every collected post with TypeSafe Jev, and sends one concise report to Slack at 18:00 Europe/Amsterdam (09:00 Pacific / 12:00 Eastern during the common daylight-saving period).
 
 It does not use the paid X API.
 
@@ -24,6 +24,7 @@ If nothing clears the fire threshold, the scout says so instead of fabricating a
 
 1. `X_AUTH_TOKEN` and `X_CT0` from the burner account. In Chrome while logged into x.com, open Developer Tools → Application → Cookies → `https://x.com` and copy the values for `auth_token` and `ct0`.
 2. A Slack incoming webhook configured for `#general`. Put its URL in `SLACK_WEBHOOK_URL`.
+3. A TypeSafe API key in `TYPESAFE_API_KEY`. Jev makes the high-volume semantic decisions: root launch vs. follow-up, public buildability, technology type, and real builder demo vs. commentary.
 
 These are secrets. Keep them in `.env` locally or GitHub Actions secrets; never commit them.
 
@@ -51,3 +52,5 @@ Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `1
 - X's private web operation IDs sometimes change. The three `X_*_QUERY_ID` settings make those repairable without changing code.
 
 The monitor is deliberately conservative: a fresh post from a major account does not qualify unless its engagement or engagement speed is strong. It also rejects replies and quote posts as root launches, which prevents the low-engagement follow-up mistake described in the brief.
+
+Jev handles semantic judgment over post text. Ordinary code still owns freshness, engagement math, thresholds, deduplication, and Slack delivery. If TypeSafe is unavailable for an individual post, the scout falls back to the original deterministic rules for that post.

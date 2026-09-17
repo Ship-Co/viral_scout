@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { fetchAllTweets } from "./x.js";
 import { findFire, formatReport } from "./scout.js";
 import { sendToSlack } from "./slack.js";
+import { classifyPosts } from "./typesafe.js";
 
 export function isAuthorizedCron(request) {
   const secret = process.env.CRON_SECRET;
@@ -31,11 +32,13 @@ export async function runScheduledScout(utcHour) {
   }
 
   const { tweets, errors } = await fetchAllTweets(config);
+  const classification = await classifyPosts(tweets);
   const items = findFire(tweets, {
     launchHandles: config.launchHandles,
     minAgeHours: config.minAgeHours,
     lookbackHours: config.lookbackHours,
     maxItems: config.maxReportItems,
+    decisions: classification.decisions,
   });
   const report = formatReport(items);
   const coverageHealthy = errors.length <= 2;
@@ -45,6 +48,8 @@ export async function runScheduledScout(utcHour) {
     scanned: tweets.length,
     sourceFailures: errors.length,
     qualifyingLaunches: items.length,
+    jevClassified: classification.classified,
+    jevFailures: classification.failed,
     sent: coverageHealthy,
   };
 }

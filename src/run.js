@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { fetchAllTweets } from "./x.js";
 import { findFire, formatReport } from "./scout.js";
 import { sendToSlack } from "./slack.js";
+import { classifyPosts } from "./typesafe.js";
 
 const dryRun = process.argv.includes("--dry-run");
 const force = process.argv.includes("--force") || process.env.FORCE_RUN === "1";
@@ -43,15 +44,22 @@ async function main() {
   }
 
   const { tweets, errors } = await fetchAllTweets(config);
+  const classification = await classifyPosts(tweets);
   const items = findFire(tweets, {
     launchHandles: config.launchHandles,
     minAgeHours: config.minAgeHours,
     lookbackHours: config.lookbackHours,
     maxItems: config.maxReportItems,
+    decisions: classification.decisions,
   });
   const report = formatReport(items);
   console.log(report);
   console.log(`\nScanned ${tweets.length} unique posts. ${errors.length} source(s) failed.`);
+  console.log(
+    classification.disabled
+      ? "Jev classification disabled: TYPESAFE_API_KEY is missing."
+      : `Jev classified ${classification.classified} posts; ${classification.failed} failed; ${classification.inputTokens} input tokens.`
+  );
 
   const coverageHealthy = errors.length <= 2;
   if (!dryRun && coverageHealthy) await sendToSlack(report);

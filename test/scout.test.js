@@ -196,3 +196,51 @@ test("does not surface an unknown model announcement without a public access pat
   });
   assert.equal(findFire([inaccessible], { now, launchHandles: handles }).length, 0);
 });
+
+test("semantic decisions can surface an unfamiliar buildable launch without keyword matching", () => {
+  const launch = tweet({
+    id: "unfamiliar",
+    author: "newmaker",
+    text: "Meet Pollen: turn three room photos into an editable spatial scene. Try it today.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 1200, reposts: 150, replies: 80, quotes: 70, bookmarks: 500, views: 399000 },
+  });
+  const decisions = new Map([[launch.id, {
+    rootLaunch: 0.96,
+    publicAccess: 0.88,
+    buildSurface: 0.93,
+    technologyType: "creative_tool",
+  }]]);
+  const result = findFire([launch], { now, launchHandles: handles, decisions });
+  assert.equal(result[0].launch.id, "unfamiliar");
+});
+
+test("semantic decisions reject viral commentary and accept a concrete builder demo", () => {
+  const launch = tweet({
+    id: "launch-semantic",
+    author: "newmaker",
+    text: "Pollen turns room photos into editable spatial scenes and is available today.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 1200, reposts: 150, replies: 80, quotes: 70, bookmarks: 500, views: 399000 },
+  });
+  const demo = tweet({
+    id: "demo-semantic",
+    author: "maker",
+    text: "My apartment became an editable spatial scene in Pollen. Here is the result.",
+    hasMedia: true,
+    metrics: { likes: 300, reposts: 30, replies: 20, quotes: 10, bookmarks: 100, views: 30000 },
+  });
+  const commentary = tweet({
+    id: "comment-semantic",
+    author: "pundit",
+    text: "Pollen is going to change spatial computing forever.",
+    metrics: { likes: 900, reposts: 100, replies: 30, quotes: 20, bookmarks: 100, views: 100000 },
+  });
+  const decisions = new Map([
+    [launch.id, { rootLaunch: 0.98, publicAccess: 0.9, buildSurface: 0.95, technologyType: "creative_tool" }],
+    [demo.id, { builderDemo: 0.91, shippedArtifact: 0.82, commentary: 0.04 }],
+    [commentary.id, { builderDemo: 0.02, shippedArtifact: 0.01, commentary: 0.96 }],
+  ]);
+  const result = findFire([launch, demo, commentary], { now, launchHandles: handles, decisions });
+  assert.deepEqual(result[0].builders.map((item) => item.id), ["demo-semantic"]);
+});
