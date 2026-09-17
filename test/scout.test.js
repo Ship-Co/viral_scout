@@ -401,3 +401,24 @@ test("does not attach a different Claude Code build to Claude Projects", () => {
   const result = findFire([launch, unrelated], { now, minAgeHours: 0, decisions, requireDecisions: true });
   assert.equal(result[0].builders.length, 0);
 });
+
+test("does not attach a Jev build to Gemini just because the benchmark compares Gemini", () => {
+  const launch = tweet({
+    id: "gemini",
+    author: "GoogleAI",
+    text: "We're updating Gemini managed agents with a new harness and public API.",
+    metrics: { likes: 2000, reposts: 200, replies: 80, quotes: 70, bookmarks: 500, views: 200000 },
+  });
+  const build = tweet({
+    id: "jev-build",
+    author: "builder",
+    text: "I used Jev to classify 1,018 papers, then compared the same run with Gemini Flash.",
+    hasMedia: true,
+  });
+  const decisions = new Map([
+    [launch.id, { rootLaunch: 0.95, publicAccess: 0.9, buildSurface: 0.8, capabilityNovelty: 2, technologyType: "developer_tool" }],
+    [build.id, { builderDemo: 0.95, shippedArtifact: 0.9, commentary: 0.05 }],
+  ]);
+  const [item] = findFire([launch, build], { now, minAgeHours: 0, decisions });
+  assert.equal(item.builders.length, 0);
+});

@@ -146,6 +146,18 @@ function relatesTo(builder, launch) {
   return tokens.filter((token) => lower.includes(token)).length >= 2;
 }
 
+function relatesBuilderToLaunch(builder, launch) {
+  const text = builder.text || "";
+  const explicit = text.match(/\b(?:used|using|via|powered by|built with|made with|created with|added)\s+(?:the\s+)?@?([A-Za-z][A-Za-z0-9_.+-]*)/i) ||
+    text.match(/\bbuilt\s+(?:a|an|the\s+)?@?([A-Za-z][A-Za-z0-9_.+-]*)/i);
+  if (explicit) {
+    const tool = explicit[1].toLowerCase();
+    const filler = new Set(["a", "an", "the", "my", "our", "this", "new", "same"]);
+    if (!filler.has(tool)) return launch.names.some((name) => name === tool);
+  }
+  return relatesTo(builder, launch);
+}
+
 function titleFrom(tweet) {
   const first = tweet.text.replace(/https?:\/\/\S+/g, "").split(/[\n.!?]/)[0].trim();
   const name = productNames(tweet)[0];
@@ -250,7 +262,7 @@ export function findFire(tweets, options = {}) {
           age <= maxAge &&
           (decision ? semanticBuilder : rulesBuilder) &&
           (decision ? decision.commentary < 0.6 : !PROMOTIONAL_WORDS.test(tweet.text)) &&
-          relatesTo(tweet, launch)
+          relatesBuilderToLaunch(tweet, launch)
         );
       })
       .sort((a, b) => momentum(b, now) - momentum(a, now))
@@ -302,8 +314,11 @@ export function formatReport(items, options = {}) {
   const withBuilders = items.filter((item) => item.builders.length > 0);
   if (withBuilders.length) {
     lines.push("", "*People shipping*");
+    const shownBuilderIds = new Set();
     for (const item of withBuilders) {
       for (const builder of item.builders.slice(0, 2)) {
+        if (shownBuilderIds.has(builder.id)) continue;
+        shownBuilderIds.add(builder.id);
         const summary = builder.text.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
         const label = productNames(item.launch)[0] || item.title;
         lines.push(`• *${label}:* ${summary.slice(0, 120)}${summary.length > 120 ? "…" : ""}`);
