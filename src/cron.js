@@ -44,6 +44,7 @@ export async function runScheduledScout(utcHour) {
     launchHandles: config.launchHandles,
     minAgeHours: config.minAgeHours,
     lookbackHours: config.lookbackHours,
+    rootContextHours: config.rootContextHours,
     maxItems: config.maxReportItems,
     decisions: classification.decisions,
     requireDecisions: !classification.disabled,

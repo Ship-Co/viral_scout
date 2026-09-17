@@ -319,3 +319,67 @@ test("classification candidates include hot technology and builder posts but ski
   ], { now, launchHandles: handles });
   assert.deepEqual(new Set(candidates.map((item) => item.id)), new Set(["tech", "builder"]));
 });
+
+test("keeps an older root launch when independent momentum and builds are fresh", () => {
+  const root = tweet({
+    id: "jev-root",
+    author: "typesafeai",
+    text: "We are officially out of stealth. Get access to Jev on our website.",
+    createdAt: "2026-09-09T09:00:00.000Z",
+    metrics: { likes: 3200, reposts: 170, replies: 130, quotes: 80, bookmarks: 940, views: 437000 },
+  });
+  const buzz = ["a", "b", "c"].map((author, index) => tweet({
+    id: `jev-buzz-${author}`,
+    author,
+    text: `Jev is a major new primitive for fast AI decisions ${index}`,
+    createdAt: "2026-09-11T03:00:00.000Z",
+    metrics: { likes: 500, reposts: 30, replies: 20, quotes: 10, bookmarks: 100, views: 50000 },
+  }));
+  const build = tweet({
+    id: "jev-build",
+    author: "builder",
+    text: "I built a Jev Doom demo where every enemy makes its own decisions.",
+    createdAt: "2026-09-11T02:00:00.000Z",
+    hasMedia: true,
+    metrics: { likes: 4, reposts: 0, replies: 0, quotes: 0, bookmarks: 0, views: 300 },
+  });
+  const decisions = new Map([
+    [root.id, { rootLaunch: 0.98, publicAccess: 0.9, buildSurface: 0.9, capabilityNovelty: 2.8, technologyType: "model_or_api" }],
+    ...buzz.map((post) => [post.id, { commentary: 0.9 }]),
+    [build.id, { builderDemo: 0.95, shippedArtifact: 0.9, commentary: 0.02 }],
+  ]);
+  const result = findFire([root, ...buzz, build], {
+    now,
+    minAgeHours: 0,
+    lookbackHours: 24,
+    rootContextHours: 72,
+    launchHandles: new Set(["typesafeai"]),
+    decisions,
+    requireDecisions: true,
+  });
+  assert.equal(result[0].launch.id, "jev-root");
+  assert.equal(result[0].currentBuzz.length, 3);
+  assert.deepEqual(result[0].builders.map((post) => post.id), ["jev-build"]);
+});
+
+test("does not attach a different Claude Code build to Claude Projects", () => {
+  const launch = tweet({
+    id: "projects",
+    author: "ClaudeDevs",
+    text: "Today we're rolling out Projects in Claude Code on desktop and web.",
+    metrics: { likes: 4000, reposts: 200, replies: 100, quotes: 80, bookmarks: 1300, views: 270000 },
+  });
+  const unrelated = tweet({
+    id: "voice-mode",
+    author: "builder",
+    text: "I built voice mode for Claude Code so I can keep coding on a walk.",
+    hasMedia: true,
+    metrics: { likes: 1000, reposts: 50, replies: 30, quotes: 10, bookmarks: 300, views: 60000 },
+  });
+  const decisions = new Map([
+    [launch.id, { rootLaunch: 1, publicAccess: 0.9, buildSurface: 0.7, capabilityNovelty: 2, technologyType: "developer_tool" }],
+    [unrelated.id, { builderDemo: 1, shippedArtifact: 1, commentary: 0 }],
+  ]);
+  const result = findFire([launch, unrelated], { now, minAgeHours: 0, decisions, requireDecisions: true });
+  assert.equal(result[0].builders.length, 0);
+});

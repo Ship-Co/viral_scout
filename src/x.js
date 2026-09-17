@@ -275,12 +275,14 @@ export async function fetchAllTweets({
   listIds,
   directHandles,
   lookbackHours,
+  rootContextHours = 72,
   homeMaxPages = 50,
   followingMaxPages = 50,
   listMaxPages = 20,
   priorityListMaxPages = 30,
 }) {
   const cutoff = Date.now() - lookbackHours * 60 * 60 * 1000;
+  const rootCutoff = Date.now() - rootContextHours * 60 * 60 * 1000;
   const listQueryId = process.env.X_LIST_QUERY_ID || "u6PUF1835XGBkf6MQZUV8A";
   const homeQueryId = process.env.X_HOME_QUERY_ID || "nn16KxqX3E1OdE7WlHB5LA";
   const followingQueryId = process.env.X_FOLLOWING_QUERY_ID || "Odyc0iCUHiGTk7LkJLGvyQ";
@@ -288,7 +290,7 @@ export async function fetchAllTweets({
   const directJobs = [
     ...[...(directHandles || [])].map((handle) => ({
       source: `account:${handle}`,
-      run: () => fetchUserTimeline(handle, cutoff),
+      run: () => fetchUserTimeline(handle, rootCutoff),
     })),
   ];
   const feedJobs = [
