@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findFire, formatReport } from "../src/scout.js";
+import {
+  findFire,
+  formatReport,
+  hasHealthyClassification,
+  hasHealthyCoverage,
+  selectClassificationCandidates,
+} from "../src/scout.js";
 
 const now = new Date("2026-09-11T07:00:00.000Z");
 const handles = new Set(["openaidevs", "cursor_ai"]);
@@ -209,10 +215,28 @@ test("semantic decisions can surface an unfamiliar buildable launch without keyw
     rootLaunch: 0.96,
     publicAccess: 0.88,
     buildSurface: 0.93,
+    capabilityNovelty: 2.4,
     technologyType: "creative_tool",
   }]]);
   const result = findFire([launch], { now, launchHandles: handles, decisions });
   assert.equal(result[0].launch.id, "unfamiliar");
+});
+
+test("semantic decisions reject a viral but incremental product update", () => {
+  const update = tweet({
+    id: "incremental",
+    author: "toolmaker",
+    text: "ZCode now supports additional model providers with improved stability.",
+    metrics: { likes: 1200, reposts: 150, replies: 80, quotes: 70, bookmarks: 500, views: 399000 },
+  });
+  const decisions = new Map([[update.id, {
+    rootLaunch: 0.9,
+    publicAccess: 0.9,
+    buildSurface: 0.8,
+    capabilityNovelty: 1.1,
+    technologyType: "developer_tool",
+  }]]);
+  assert.equal(findFire([update], { now, minAgeHours: 0, decisions }).length, 0);
 });
 
 test("semantic decisions reject viral commentary and accept a concrete builder demo", () => {
@@ -237,10 +261,61 @@ test("semantic decisions reject viral commentary and accept a concrete builder d
     metrics: { likes: 900, reposts: 100, replies: 30, quotes: 20, bookmarks: 100, views: 100000 },
   });
   const decisions = new Map([
-    [launch.id, { rootLaunch: 0.98, publicAccess: 0.9, buildSurface: 0.95, technologyType: "creative_tool" }],
+    [launch.id, { rootLaunch: 0.98, publicAccess: 0.9, buildSurface: 0.95, capabilityNovelty: 2.4, technologyType: "creative_tool" }],
     [demo.id, { builderDemo: 0.91, shippedArtifact: 0.82, commentary: 0.04 }],
-    [commentary.id, { builderDemo: 0.02, shippedArtifact: 0.01, commentary: 0.96 }],
+    [commentary.id, { builderDemo: 0.9, shippedArtifact: 0.9, commentary: 0.04 }],
   ]);
   const result = findFire([launch, demo, commentary], { now, launchHandles: handles, decisions });
   assert.deepEqual(result[0].builders.map((item) => item.id), ["demo-semantic"]);
+});
+
+test("the same engagement is hot when fresh and stale after most of a day", () => {
+  const base = {
+    author: "OpenAIDevs",
+    text: "Astra Tools API is now available for developers.",
+    metrics: { likes: 100, reposts: 2, replies: 3, quotes: 1, bookmarks: 8, views: 5000 },
+  };
+  const fresh = tweet({ ...base, id: "fresh-heat", createdAt: "2026-09-11T06:50:00.000Z" });
+  const stale = tweet({ ...base, id: "stale-heat", createdAt: "2026-09-10T11:00:00.000Z" });
+  assert.equal(findFire([fresh], { now, minAgeHours: 0, launchHandles: handles }).length, 1);
+  assert.equal(findFire([stale], { now, minAgeHours: 0, launchHandles: handles }).length, 0);
+});
+
+test("direct-account rate limits do not block a report with healthy feed coverage", () => {
+  const tweets = Array.from({ length: 300 }, (_, index) => ({ id: String(index) }));
+  const errors = ["account:openai: Error 429", "account:anthropicai: Error 429"];
+  assert.equal(hasHealthyCoverage(tweets, errors, { "for-you": 100, following: 200 }), true);
+  assert.equal(hasHealthyCoverage(tweets, ["following: Error 429", "for-you: Error 429", "list:1: Error 429"], { following: 200 }), false);
+});
+
+test("partial Jev coverage fails closed", () => {
+  assert.equal(hasHealthyClassification({ disabled: false, classified: 950 }, 1000), true);
+  assert.equal(hasHealthyClassification({ disabled: false, classified: 949 }, 1000), false);
+  assert.equal(hasHealthyClassification({ disabled: true, classified: 0 }, 1000), false);
+
+  const launch = tweet({
+    id: "missing-decision",
+    author: "OpenAIDevs",
+    text: "Astra API is now available for developers.",
+    metrics: { likes: 5000, reposts: 500, replies: 100, quotes: 100, bookmarks: 2000, views: 900000 },
+  });
+  assert.equal(findFire([launch], { now, launchHandles: handles, requireDecisions: true }).length, 0);
+});
+
+test("classification candidates include hot technology and builder posts but skip ordinary noise", () => {
+  const candidates = selectClassificationCandidates([
+    tweet({
+      id: "tech",
+      text: "Introducing a new spatial model API.",
+      metrics: { likes: 100, reposts: 2, replies: 3, quotes: 1, bookmarks: 8, views: 5000 },
+      createdAt: "2026-09-11T06:50:00.000Z",
+    }),
+    tweet({
+      id: "builder",
+      text: "I built a tiny voice agent demo with Nova.",
+      metrics: { likes: 5, reposts: 0, replies: 0, quotes: 0, bookmarks: 1, views: 200 },
+    }),
+    tweet({ id: "noise", text: "Having coffee this morning." }),
+  ], { now, launchHandles: handles });
+  assert.deepEqual(new Set(candidates.map((item) => item.id)), new Set(["tech", "builder"]));
 });

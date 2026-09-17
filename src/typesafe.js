@@ -84,21 +84,59 @@ function retryDelay(response, attempt) {
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-export async function evaluatePost(post, options = {}) {
+function pointAtPost(value, index) {
+  if (typeof value === "string") return value.replaceAll("`post.", `\`posts[${index}].`);
+  if (Array.isArray(value)) return value.map((item) => pointAtPost(item, index));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, pointAtPost(item, index)]));
+  }
+  return value;
+}
+
+function normalizeDecision(answers, model, usage, index) {
+  const answer = (name) => answers[`${index}_${name}`] || {};
+  const role = answer("event_role");
+  const type = answer("technology_type");
+  return {
+    model,
+    role: role.choice || "other",
+    roleConfidence: role.confidence || 0,
+    rootLaunch: role.probabilities?.root_launch || 0,
+    builderDemo: role.probabilities?.builder_demo || 0,
+    followup: role.probabilities?.followup || 0,
+    commentary: role.probabilities?.commentary || 0,
+    technologyType: type.choice || "non_technology",
+    technologyTypeConfidence: type.confidence || 0,
+    publicAccess: answer("public_access").noul || 0,
+    buildSurface: answer("build_surface").noul || 0,
+    shippedArtifact: answer("shipped_artifact").noul || 0,
+    capabilityNovelty: answer("capability_novelty").score || 0,
+    usage,
+  };
+}
+
+export async function evaluatePostBatch(posts, options = {}) {
   const apiKey = options.apiKey || process.env.TYPESAFE_API_KEY;
   if (!apiKey) throw new Error("Missing TYPESAFE_API_KEY");
+  if (posts.length === 0) return [];
   const fetchImpl = options.fetchImpl || fetch;
   const model = options.model || process.env.TYPESAFE_MODEL || "jev-latest";
   const maxAttempts = options.maxAttempts ?? 3;
   const state = {
-    post: {
+    posts: posts.map((post) => ({
       text: post.text,
       author: post.author || null,
       is_reply: Boolean(post.isReply),
       is_quote: Boolean(post.isQuote),
       has_media: Boolean(post.hasMedia),
-    },
+    })),
   };
+  const questions = {};
+  for (let index = 0; index < posts.length; index += 1) {
+    for (const [name, question] of Object.entries(VIRAL_SCOUT_QUESTIONS)) {
+      questions[`${index}_${name}`] = pointAtPost(question, index);
+    }
+  }
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await fetchImpl(ENDPOINT, {
@@ -107,31 +145,15 @@ export async function evaluatePost(post, options = {}) {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ state, model, questions: VIRAL_SCOUT_QUESTIONS }),
+      body: JSON.stringify({ state, model, questions }),
       signal: AbortSignal.timeout(options.timeoutMs ?? 10_000),
     });
 
     if (response.ok) {
       const body = await response.json();
       const answers = body.answers || {};
-      const role = answers.event_role || {};
-      const type = answers.technology_type || {};
-      return {
-        model: body.model || model,
-        role: role.choice || "other",
-        roleConfidence: role.confidence || 0,
-        rootLaunch: role.probabilities?.root_launch || 0,
-        builderDemo: role.probabilities?.builder_demo || 0,
-        followup: role.probabilities?.followup || 0,
-        commentary: role.probabilities?.commentary || 0,
-        technologyType: type.choice || "non_technology",
-        technologyTypeConfidence: type.confidence || 0,
-        publicAccess: answers.public_access?.noul || 0,
-        buildSurface: answers.build_surface?.noul || 0,
-        shippedArtifact: answers.shipped_artifact?.noul || 0,
-        capabilityNovelty: answers.capability_novelty?.score || 0,
-        usage: body.usage || { input_tokens: 0, output_tokens: 0 },
-      };
+      const usage = body.usage || { input_tokens: 0, output_tokens: 0 };
+      return posts.map((_, index) => normalizeDecision(answers, body.model || model, usage, index));
     }
 
     const retryable = response.status === 429 || response.status === 529;
@@ -144,6 +166,11 @@ export async function evaluatePost(post, options = {}) {
   throw new Error("TypeSafe evaluation failed");
 }
 
+export async function evaluatePost(post, options = {}) {
+  const [decision] = await evaluatePostBatch([post], options);
+  return decision;
+}
+
 export async function classifyPosts(posts, options = {}) {
   const apiKey = options.apiKey || process.env.TYPESAFE_API_KEY;
   if (!apiKey) {
@@ -154,24 +181,28 @@ export async function classifyPosts(posts, options = {}) {
   const failures = [];
   let cursor = 0;
   let inputTokens = 0;
-  const concurrency = Math.max(1, Math.min(Number(options.concurrency || process.env.TYPESAFE_CONCURRENCY || 32), 64));
+  const batchSize = Math.max(1, Math.min(Number(options.batchSize || process.env.TYPESAFE_BATCH_SIZE || 8), 16));
+  const concurrency = Math.max(1, Math.min(Number(options.concurrency || process.env.TYPESAFE_CONCURRENCY || 12), 24));
+  const batches = [];
+  for (let index = 0; index < posts.length; index += batchSize) batches.push(posts.slice(index, index + batchSize));
 
   async function worker() {
-    while (cursor < posts.length) {
+    while (cursor < batches.length) {
       const index = cursor;
       cursor += 1;
-      const post = posts[index];
+      const batch = batches[index];
       try {
-        const decision = await evaluatePost(post, options);
-        decisions.set(post.id, decision);
-        inputTokens += decision.usage.input_tokens || 0;
+        const batchDecisions = await evaluatePostBatch(batch, options);
+        batch.forEach((post, postIndex) => decisions.set(post.id, batchDecisions[postIndex]));
+        inputTokens += batchDecisions[0]?.usage.input_tokens || 0;
       } catch (error) {
-        failures.push({ id: post.id, error: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(...batch.map((post) => ({ id: post.id, error: message })));
       }
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, posts.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, () => worker()));
   return {
     decisions,
     classified: decisions.size,

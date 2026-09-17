@@ -49,8 +49,10 @@ Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `1
 - `LAUNCH_HANDLES`: accounts allowed to originate a launch.
 - `X_LIST_IDS`: X lists used as the wider launch and builder radar.
 - `MIN_AGE_HOURS`, `LOOKBACK_HOURS`, `MAX_REPORT_ITEMS`: freshness and length.
+- `X_*_MAX_PAGES`: high safety caps; each feed stops earlier once it has paged beyond the 24-hour cutoff.
+- `X_REQUEST_CONCURRENCY`, `X_REQUEST_INTERVAL_MS`: global pacing for the session-based X reads.
 - X's private web operation IDs sometimes change. The three `X_*_QUERY_ID` settings make those repairable without changing code.
 
 The monitor is deliberately conservative: a fresh post from a major account does not qualify unless its engagement or engagement speed is strong. It also rejects replies and quote posts as root launches, which prevents the low-engagement follow-up mistake described in the brief.
 
-Jev handles semantic judgment over post text. Ordinary code still owns freshness, engagement math, thresholds, deduplication, and Slack delivery. If TypeSafe is unavailable for an individual post, the scout falls back to the original deterministic rules for that post.
+Ordinary code first computes age-adjusted heat for the full crawl. Jev then handles semantic judgment for every potentially hot technology post and every plausible builder artifact; posts are batched to reduce requests. A post needs less absolute engagement when it is minutes old and progressively more as it ages. If Jev covers less than 95% of those candidates, the run fails closed and does not send a degraded Slack report.

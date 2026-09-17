@@ -59,6 +59,38 @@ const FIELD_TOGGLES = {
   withDisallowedReplyControls: false,
 };
 
+const X_REQUEST_CONCURRENCY = Math.max(1, Number(process.env.X_REQUEST_CONCURRENCY || 4));
+const X_REQUEST_INTERVAL_MS = Math.max(0, Number(process.env.X_REQUEST_INTERVAL_MS || 120));
+let activeRequests = 0;
+let nextRequestAt = 0;
+const requestWaiters = [];
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function acquireRequestSlot() {
+  if (activeRequests >= X_REQUEST_CONCURRENCY) {
+    await new Promise((resolve) => requestWaiters.push(resolve));
+  }
+  activeRequests += 1;
+  const scheduledAt = Math.max(Date.now(), nextRequestAt);
+  nextRequestAt = scheduledAt + X_REQUEST_INTERVAL_MS;
+  if (scheduledAt > Date.now()) await wait(scheduledAt - Date.now());
+}
+
+function releaseRequestSlot() {
+  activeRequests -= 1;
+  requestWaiters.shift()?.();
+}
+
+async function xFetch(url, options) {
+  await acquireRequestSlot();
+  try {
+    return await fetch(url, options);
+  } finally {
+    releaseRequestSlot();
+  }
+}
+
 function headers() {
   const authToken = process.env.X_AUTH_TOKEN;
   const ct0 = process.env.X_CT0;
@@ -83,7 +115,7 @@ async function graphql(operation, queryId, variables) {
     features: JSON.stringify(FEATURES),
     fieldToggles: JSON.stringify(FIELD_TOGGLES),
   });
-  const response = await fetch(`${X_GRAPHQL_BASE}/${queryId}/${operation}?${params}`, {
+  const response = await xFetch(`${X_GRAPHQL_BASE}/${queryId}/${operation}?${params}`, {
     headers: headers(),
   });
   if (!response.ok) {
@@ -156,6 +188,16 @@ function tweetsFromInstructions(instructions, source) {
   return tweets;
 }
 
+export function userTimelineInstructions(data) {
+  const result = data?.data?.user?.result;
+  return (
+    result?.timeline_v2?.timeline?.instructions ||
+    result?.timeline?.timeline?.instructions ||
+    result?.timeline?.instructions ||
+    []
+  );
+}
+
 async function fetchUserTimeline(handle, cutoff) {
   const userQueryId = process.env.X_USER_QUERY_ID || "KybxDj9RrADIITXlGG8kpw";
   const tweetsQueryId = process.env.X_USER_TWEETS_QUERY_ID || "OeFjWKHutsuyWXZGmLr02A";
@@ -174,10 +216,10 @@ async function fetchUserTimeline(handle, cutoff) {
     withVoice: true,
     withV2Timeline: true,
   });
-  const instructions = timelineData?.data?.user?.result?.timeline_v2?.timeline?.instructions || [];
+  const instructions = userTimelineInstructions(timelineData);
   return tweetsFromInstructions(instructions, `account:${handle}`).filter((tweet) => {
     const created = new Date(tweet.createdAt || 0).getTime();
-    return !created || created >= cutoff;
+    return Number.isFinite(created) && created >= cutoff && created <= Date.now();
   });
 }
 
@@ -195,7 +237,7 @@ async function fetchTimeline({ endpoint, queryId, variables, source, maxPages, c
       fieldToggles: JSON.stringify(FIELD_TOGGLES),
     });
     const url = `${X_GRAPHQL_BASE}/${queryId}/${endpoint}?${params}`;
-    const response = await fetch(url, { headers: headers() });
+    const response = await xFetch(url, { headers: headers() });
     if (!response.ok) {
       const body = await response.text();
       throw new Error(`${endpoint} failed (${response.status}): ${body.slice(0, 180)}`);
@@ -216,58 +258,104 @@ async function fetchTimeline({ endpoint, queryId, variables, source, maxPages, c
       if (!tweet?.id || seen.has(tweet.id)) continue;
       seen.add(tweet.id);
       const created = new Date(tweet.createdAt || 0).getTime();
-      if (created && created < cutoff) continue;
+      if (!Number.isFinite(created) || created < cutoff) continue;
       collected.push(tweet);
       freshCount += 1;
     }
 
     oldPages = freshCount === 0 ? oldPages + 1 : 0;
-    if (oldPages >= 2 || !nextCursor || nextCursor === cursor) break;
+    const reachedAgeBoundary = endpoint !== "HomeTimeline" && oldPages >= 2;
+    if (reachedAgeBoundary || !nextCursor || nextCursor === cursor) break;
     cursor = nextCursor;
   }
   return collected;
 }
 
-export async function fetchAllTweets({ listIds, launchHandles, directHandles, lookbackHours }) {
+export async function fetchAllTweets({
+  listIds,
+  directHandles,
+  lookbackHours,
+  homeMaxPages = 50,
+  followingMaxPages = 50,
+  listMaxPages = 20,
+  priorityListMaxPages = 30,
+}) {
   const cutoff = Date.now() - lookbackHours * 60 * 60 * 1000;
   const listQueryId = process.env.X_LIST_QUERY_ID || "u6PUF1835XGBkf6MQZUV8A";
   const homeQueryId = process.env.X_HOME_QUERY_ID || "nn16KxqX3E1OdE7WlHB5LA";
   const followingQueryId = process.env.X_FOLLOWING_QUERY_ID || "Odyc0iCUHiGTk7LkJLGvyQ";
 
-  const jobs = [
-    ...[...(directHandles || [])].map((handle) => fetchUserTimeline(handle, cutoff)),
+  const directJobs = [
+    ...[...(directHandles || [])].map((handle) => ({
+      source: `account:${handle}`,
+      run: () => fetchUserTimeline(handle, cutoff),
+    })),
+  ];
+  const feedJobs = [
     ...listIds.map((listId, index) =>
-      fetchTimeline({
+      ({ source: `list:${listId}`, run: () => fetchTimeline({
         endpoint: "ListLatestTweetsTimeline",
         queryId: listQueryId,
         variables: { listId, count: 100 },
         source: `list:${listId}`,
-        maxPages: index === 0 ? 4 : 2,
+        maxPages: index < 2 ? priorityListMaxPages : listMaxPages,
         cutoff,
-      })
+      }) })
     ),
-    fetchTimeline({
+    { source: "for-you", run: () => fetchTimeline({
       endpoint: "HomeTimeline",
       queryId: homeQueryId,
       variables: { count: 100, includePromotedContent: false },
       source: "for-you",
-      maxPages: 3,
+      maxPages: homeMaxPages,
       cutoff,
-    }),
-    fetchTimeline({
+    }) },
+    { source: "following", run: () => fetchTimeline({
       endpoint: "HomeLatestTimeline",
       queryId: followingQueryId,
       variables: { count: 100, includePromotedContent: false },
       source: "following",
-      maxPages: 2,
+      maxPages: followingMaxPages,
       cutoff,
-    }),
+    }) },
   ];
 
-  const results = await Promise.allSettled(jobs);
-  const errors = results.filter((result) => result.status === "rejected").map((result) => String(result.reason));
+  async function settleWithLimit(jobs, limit) {
+    const settled = new Array(jobs.length);
+    let cursor = 0;
+    async function worker() {
+      while (cursor < jobs.length) {
+        const index = cursor;
+        cursor += 1;
+        try {
+          settled[index] = { status: "fulfilled", value: await jobs[index].run() };
+        } catch (reason) {
+          settled[index] = { status: "rejected", reason };
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, jobs.length) }, () => worker()));
+    return settled;
+  }
+
+  const [directResults, feedResults] = await Promise.all([
+    settleWithLimit(directJobs, 2),
+    Promise.allSettled(feedJobs.map((job) => job.run())),
+  ]);
+  const jobs = [...directJobs, ...feedJobs];
+  const results = [...directResults, ...feedResults];
+  const errors = results.flatMap((result, index) =>
+    result.status === "rejected" ? [`${jobs[index].source}: ${String(result.reason)}`] : []
+  );
+  const sourceStats = Object.fromEntries(results.map((result, index) => [
+    jobs[index].source,
+    result.status === "fulfilled" ? result.value.length : 0,
+  ]));
   const tweets = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-  const unique = [...new Map(tweets.map((tweet) => [tweet.id, tweet])).values()];
+  const unique = [...new Map(tweets.map((tweet) => [tweet.id, tweet])).values()].filter((tweet) => {
+    const created = new Date(tweet.createdAt || 0).getTime();
+    return Number.isFinite(created) && created >= cutoff && created <= Date.now();
+  });
   if (unique.length === 0 && errors.length) throw new Error(errors.join(" | "));
-  return { tweets: unique, errors };
+  return { tweets: unique, errors, sourceStats };
 }

@@ -25,4 +25,8 @@ export const config = {
   minAgeHours: Number(process.env.MIN_AGE_HOURS || 0),
   maxReportItems: Number(process.env.MAX_REPORT_ITEMS || 3),
   digestHourAmsterdam: Number(process.env.DIGEST_HOUR_AMSTERDAM || 18),
+  homeMaxPages: Number(process.env.X_HOME_MAX_PAGES || 50),
+  followingMaxPages: Number(process.env.X_FOLLOWING_MAX_PAGES || 50),
+  listMaxPages: Number(process.env.X_LIST_MAX_PAGES || 20),
+  priorityListMaxPages: Number(process.env.X_PRIORITY_LIST_MAX_PAGES || 30),
 };

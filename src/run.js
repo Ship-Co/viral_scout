@@ -1,6 +1,12 @@
 import { config } from "./config.js";
 import { fetchAllTweets } from "./x.js";
-import { findFire, formatReport } from "./scout.js";
+import {
+  findFire,
+  formatReport,
+  hasHealthyClassification,
+  hasHealthyCoverage,
+  selectClassificationCandidates,
+} from "./scout.js";
 import { sendToSlack } from "./slack.js";
 import { classifyPosts } from "./typesafe.js";
 
@@ -43,28 +49,37 @@ async function main() {
     return;
   }
 
-  const { tweets, errors } = await fetchAllTweets(config);
-  const classification = await classifyPosts(tweets);
+  const { tweets, errors, sourceStats } = await fetchAllTweets(config);
+  const candidates = selectClassificationCandidates(tweets, { launchHandles: config.launchHandles });
+  const classification = await classifyPosts(candidates);
   const items = findFire(tweets, {
     launchHandles: config.launchHandles,
     minAgeHours: config.minAgeHours,
     lookbackHours: config.lookbackHours,
     maxItems: config.maxReportItems,
     decisions: classification.decisions,
+    requireDecisions: !classification.disabled,
   });
   const report = formatReport(items);
   console.log(report);
   console.log(`\nScanned ${tweets.length} unique posts. ${errors.length} source(s) failed.`);
+  const feedCounts = ["for-you", "following"]
+    .map((source) => `${source}: ${sourceStats[source] || 0}`)
+    .join(" · ");
+  console.log(`Feed coverage: ${feedCounts}.`);
   console.log(
     classification.disabled
       ? "Jev classification disabled: TYPESAFE_API_KEY is missing."
-      : `Jev classified ${classification.classified} posts; ${classification.failed} failed; ${classification.inputTokens} input tokens.`
+      : `Jev classified ${classification.classified}/${candidates.length} candidates from ${tweets.length} posts; ${classification.failed} failed; ${classification.inputTokens} input tokens.`
   );
 
-  const coverageHealthy = errors.length <= 2;
-  if (!dryRun && coverageHealthy) await sendToSlack(report);
-  if (!dryRun && !coverageHealthy) {
-    console.log("No Slack message sent because source coverage was incomplete.");
+  const coverageHealthy = hasHealthyCoverage(tweets, errors, sourceStats);
+  const classificationHealthy = hasHealthyClassification(classification, candidates.length);
+  if (!dryRun && coverageHealthy && classificationHealthy) await sendToSlack(report);
+  if (!dryRun && (!coverageHealthy || !classificationHealthy)) {
+    console.log(
+      `No Slack message sent: source coverage ${coverageHealthy ? "healthy" : "incomplete"}; Jev coverage ${classificationHealthy ? "healthy" : "incomplete"}.`
+    );
   }
 }
 
