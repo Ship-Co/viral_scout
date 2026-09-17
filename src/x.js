@@ -356,7 +356,8 @@ export async function fetchAllTweets({
   const tweets = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
   const unique = [...new Map(tweets.map((tweet) => [tweet.id, tweet])).values()].filter((tweet) => {
     const created = new Date(tweet.createdAt || 0).getTime();
-    return Number.isFinite(created) && created >= cutoff && created <= Date.now();
+    const sourceCutoff = tweet.source?.startsWith("account:") ? rootCutoff : cutoff;
+    return Number.isFinite(created) && created >= sourceCutoff && created <= Date.now();
   });
   if (unique.length === 0 && errors.length) throw new Error(errors.join(" | "));
   return { tweets: unique, errors, sourceStats };

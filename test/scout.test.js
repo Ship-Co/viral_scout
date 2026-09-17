@@ -239,6 +239,24 @@ test("semantic decisions reject a viral but incremental product update", () => {
   assert.equal(findFire([update], { now, minAgeHours: 0, decisions }).length, 0);
 });
 
+test("strong momentum can rescue a buildable launch just below the novelty cutoff", () => {
+  const launch = tweet({
+    id: "jev-gateway",
+    author: "typesafeai",
+    text: "Jev is now available on the Vercel AI Gateway.",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    metrics: { likes: 2200, reposts: 150, replies: 80, quotes: 70, bookmarks: 650, views: 150000 },
+  });
+  const decisions = new Map([[launch.id, {
+    rootLaunch: 0.98,
+    publicAccess: 0.93,
+    buildSurface: 0.78,
+    capabilityNovelty: 1.42,
+    technologyType: "model_or_api",
+  }]]);
+  assert.equal(findFire([launch], { now, minAgeHours: 0, decisions })[0].launch.id, launch.id);
+});
+
 test("semantic decisions reject viral commentary and accept a concrete builder demo", () => {
   const launch = tweet({
     id: "launch-semantic",

@@ -6,12 +6,8 @@
   },
   "crons": [
     {
-      "path": "/api/cron-summer",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/cron-winter",
-      "schedule": "0 17 * * *"
+      "path": "/api/tick",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

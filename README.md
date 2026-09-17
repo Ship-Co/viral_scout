@@ -1,6 +1,6 @@
 # Fire Scout
 
-A small daily monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines directly through a burner account's normal web session, uses wider AI lists and feeds to find related builder posts, classifies every collected post with TypeSafe Jev, and sends one concise report to Slack at 18:00 Europe/Amsterdam (09:00 Pacific / 12:00 Eastern during the common daylight-saving period).
+A monitor for buildable AI and technology launches catching fire on X. It reads launch-account timelines through a burner account's normal web session, scans AI lists plus the For You and Following feeds, and uses TypeSafe Jev to classify promising posts. A 15-minute collector stores metric snapshots in Vercel Blob; one concise report goes to Slack at 18:00 Europe/Amsterdam.
 
 It does not use the paid X API.
 
@@ -38,9 +38,9 @@ npm run dry-run   # prints without posting to Slack
 npm run scout     # posts to Slack when it is 18:00 Amsterdam
 ```
 
-## Run daily
+## Production loop
 
-The live deployment uses Vercel cron. Two UTC slots handle Amsterdam daylight saving time; each endpoint checks the date and exactly one performs the scan.
+Vercel calls `/api/tick` every 15 minutes. Each tick scans recent feeds, rotates through direct launch accounts, classifies newly discovered candidates, and updates persistent engagement history. At 18:00 Amsterdam the same endpoint runs a deep crawl and sends the daily report. Local-time checking handles daylight saving automatically and persistent state prevents duplicate reports.
 
 Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `18`.
 
@@ -55,4 +55,4 @@ Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `1
 
 The monitor is deliberately conservative: a fresh post from a major account does not qualify unless its engagement or engagement speed is strong. It also rejects replies and quote posts as root launches, which prevents the low-engagement follow-up mistake described in the brief.
 
-Ordinary code first computes age-adjusted heat for the full crawl. Jev then handles semantic judgment for every potentially hot technology post and every plausible builder artifact; posts are batched to reduce requests. A post needs less absolute engagement when it is minutes old and progressively more as it ages. If Jev covers less than 95% of those candidates, the run fails closed and does not send a degraded Slack report.
+Ordinary code computes age-adjusted heat and measured growth between snapshots. Jev handles semantic judgment for potentially hot technology posts and plausible builder artifacts; previous decisions are reused. Repeated independent posts are clustered around distinctive technology names, allowing the scout to surface an event even when its original account is outside the watchlist. If source or Jev coverage is incomplete, the run fails closed and does not send a degraded Slack report.

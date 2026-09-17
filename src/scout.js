@@ -36,7 +36,7 @@ function engagementScore(tweet, now, thresholds) {
 }
 
 export function heatScore(tweet, now = new Date()) {
-  return engagementScore(tweet, now, {
+  const snapshotScore = engagementScore(tweet, now, {
     likes: 120,
     likesFloor: 35,
     views: 25_000,
@@ -46,6 +46,17 @@ export function heatScore(tweet, now = new Date()) {
     weighted: 240,
     weightedFloor: 80,
   });
+  const velocity = tweet.observed?.velocity;
+  if (!velocity) return snapshotScore;
+  const weightedPerHour = velocity.likes + 3 * velocity.reposts + 4 * velocity.quotes + 2 * velocity.bookmarks;
+  const velocityScore = Math.max(
+    velocity.likes / 100,
+    velocity.views / 18_000,
+    velocity.bookmarks / 40,
+    weightedPerHour / 220
+  );
+  const acceleration = Math.min(2, Math.max(0.75, tweet.observed.acceleration || 1));
+  return Math.max(snapshotScore, velocityScore * acceleration);
 }
 
 export function selectClassificationCandidates(tweets, options = {}) {
@@ -169,7 +180,8 @@ export function findFire(tweets, options = {}) {
         decision.publicAccess >= 0.55 &&
         reusableTechnology &&
         decision.buildSurface >= 0.3 &&
-        decision.capabilityNovelty >= 1.45;
+        (decision.capabilityNovelty >= 1.45 ||
+          (decision.capabilityNovelty >= 1.2 && heatScore(tweet, now) >= 1.75));
       const rulesLaunch =
         (officialLaunchAccount || selfAnnouncedPublicLaunch) &&
         LAUNCH_WORDS.test(tweet.text) &&
@@ -259,6 +271,9 @@ function metricLine(tweet, now) {
   const metrics = [`${compact(m.likes)} likes`];
   if (m.views) metrics.push(`${compact(m.views)} views`);
   if (m.bookmarks) metrics.push(`${compact(m.bookmarks)} saves`);
+  if (tweet.observed?.velocity?.likes >= 10) {
+    metrics.push(`+${compact(tweet.observed.velocity.likes)} likes/h`);
+  }
   return `${age.toFixed(age < 10 ? 1 : 0)}h · ${metrics.join(" · ")}`;
 }
 
@@ -280,7 +295,7 @@ export function formatReport(items, options = {}) {
     const carryover = ageHours(item.launch, now) > 24
       ? ` · still spreading across ${new Set(item.currentBuzz.map((tweet) => tweet.author.toLowerCase())).size} hot posts today`
       : "";
-    lines.push(`• *${item.title}* — ${metricLine(item.launch, now)}${carryover}`);
+    lines.push(`• *${item.title || titleFrom(item.launch)}* — ${metricLine(item.launch, now)}${carryover}`);
     lines.push(`  ${tweetUrl(item.launch)}`);
   }
 
