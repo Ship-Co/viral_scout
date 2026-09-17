@@ -139,9 +139,6 @@ export function mergeFireItems(sourceItems, clusterItems, maxItems = 3) {
     existing.currentBuzz = [...new Map([...(existing.currentBuzz || []), ...(candidate.currentBuzz || [])]
       .map((post) => [post.id, post])).values()];
     existing.clusterScore = Math.max(existing.clusterScore || 0, candidate.clusterScore || 0);
-    if (candidate.key && !existing.title.toLowerCase().includes(candidate.key)) {
-      existing.title = `${candidate.key[0].toUpperCase()}${candidate.key.slice(1)} — ${existing.title}`;
-    }
   }
   return merged
     .sort((a, b) => (b.clusterScore || heatScore(b.launch)) - (a.clusterScore || heatScore(a.launch)))

@@ -91,7 +91,7 @@ function snapshotVelocity(snapshots) {
   const first = snapshots[0];
   const last = snapshots.at(-1);
   const hours = (new Date(last.at) - new Date(first.at)) / 3_600_000;
-  if (hours < 0.12) return null;
+  if (hours < 0.2) return null;
   const delta = Object.fromEntries(
     ["likes", "reposts", "replies", "quotes", "bookmarks", "views"].map((key) => [
       key,
@@ -105,7 +105,7 @@ function snapshotVelocity(snapshots) {
     const middle = snapshots.at(-2);
     const recentHours = (new Date(last.at) - new Date(middle.at)) / 3_600_000;
     const priorHours = (new Date(middle.at) - new Date(first.at)) / 3_600_000;
-    if (recentHours >= 0.12 && priorHours >= 0.12) {
+    if (recentHours >= 0.2 && priorHours >= 0.2) {
       const recent = Math.max(0, last.metrics.likes - middle.metrics.likes) / recentHours;
       const prior = Math.max(0, middle.metrics.likes - first.metrics.likes) / priorHours;
       acceleration = prior > 1 ? recent / prior : recent > 5 ? 2 : 1;

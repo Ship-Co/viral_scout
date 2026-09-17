@@ -307,7 +307,8 @@ export function formatReport(items, options = {}) {
     const carryover = ageHours(item.launch, now) > 24
       ? ` · still spreading across ${new Set(item.currentBuzz.map((tweet) => tweet.author.toLowerCase())).size} hot posts today`
       : "";
-    lines.push(`• *${item.title || titleFrom(item.launch)}* — ${metricLine(item.launch, now)}${carryover}`);
+    const displayTitle = item.rootUnconfirmed ? item.title : titleFrom(item.launch);
+    lines.push(`• *${displayTitle}* — ${metricLine(item.launch, now)}${carryover}`);
     lines.push(`  ${tweetUrl(item.launch)}`);
   }
 
