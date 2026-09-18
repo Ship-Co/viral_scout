@@ -67,7 +67,10 @@ export function hasConcreteArtifact(tweet) {
 }
 
 function isClosedVerticalProduct(tweet) {
-  return CLOSED_VERTICAL.test(tweet.text || "") && !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(tweet.text || "");
+  const text = tweet.text || "";
+  if (!CLOSED_VERTICAL.test(text)) return false;
+  const partnerAnnouncement = /\b(proud|excited|thrilled)\b.{0,80}\b(support|partner|collaborat|launch)\b/i.test(text);
+  return partnerAnnouncement || !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(text);
 }
 
 export function selectClassificationCandidates(tweets, options = {}) {

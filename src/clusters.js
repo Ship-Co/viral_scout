@@ -25,8 +25,11 @@ function terms(post) {
 }
 
 function decisionIsRelevant(post, decision) {
-  const closedVertical = /\bfor\s+(law|legal|financial services|finance|healthcare|government|enterprise)\b/i.test(post.text || "") &&
-    !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(post.text || "");
+  const text = post.text || "";
+  const vertical = /\bfor\s+(law|legal|financial services|finance|healthcare|government|enterprise)\b/i.test(text);
+  const partnerAnnouncement = /\b(proud|excited|thrilled)\b.{0,80}\b(support|partner|collaborat|launch)\b/i.test(text);
+  const closedVertical = vertical && (partnerAnnouncement ||
+    !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(text));
   if (closedVertical) return false;
   return decision && (
     decision.rootLaunch >= 0.45 ||

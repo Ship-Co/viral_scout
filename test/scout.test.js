@@ -427,7 +427,7 @@ test("rejects a closed vertical partner launch even when semantic scoring calls 
   const launch = tweet({
     id: "astra-law",
     author: "harvey",
-    text: "Harvey is proud to support the launch of Astra for Law.",
+    text: "Harvey is proud to support the launch of Astra for Law, powered by an API.",
     metrics: { likes: 1000, reposts: 100, replies: 30, quotes: 20, bookmarks: 200, views: 100000 },
   });
   const decisions = new Map([[launch.id, {
