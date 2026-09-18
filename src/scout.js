@@ -6,8 +6,11 @@ const PUBLIC_ACCESS_WORDS = /\b(api|sdk|cli|open[- ]sourc(?:e|ed)|github|plugin|
 const OWN_BUILD_WORDS = /\b(i|we|my|our)\b.{0,45}\b(built|made|created|shipped|shipping|launched|prototype[dd]?|experiment(?:ed|ing)?)\b|\b(i|we)\W*(?:'ve|have|just)?\s*(built|made|created|shipped|launched)\b/i;
 const BUILD_ARTIFACT_WORDS = /\b(built with|made with|powered by|demo(?: of)?|prototype|weekend project|using .{0,30}(api|model|sdk|mcp))\b/i;
 const FIRST_PERSON_ARTIFACT = /\b(i|we|my|our)\b.{0,100}\b(built|made|created|shipped|demo|prototype|app|tool|workflow|result|scene|video|image|game|site|integration)\b/i;
+const CONCRETE_BUILD_ACTION = /\b(i|we)\b.{0,90}\b(built|rebuilt|made|created|shipped|released|launched|implemented|integrated|ported|added|used\s+\S+\s+to|asked\s+\S+\s+to)\b/i;
+const CONCRETE_ARTIFACT_CLAIM = /\b(my|our)\b.{0,100}\b(prototype|app|tool|workflow|integration|game|site|scene|apartment|room)\b.{0,100}\b(is live|works|result|became|turned into|shipped|launched)\b/i;
 const PROMOTIONAL_WORDS = /\b(you can build|lets? (?:you|developers) build|everyone build|start building|build your own)\b/i;
 const TECHNOLOGY_CONTEXT = /\b(ai|llm|model|api|sdk|cli|agent|coding|developer|open[- ]source|github|plugin|mcp|inference|multimodal|voice|video|image|3d|robot|benchmark|weights|checkpoint|framework|database|browser|automation)\b/i;
+const CLOSED_VERTICAL = /\bfor\s+(law|legal|financial services|finance|healthcare|government|enterprise)\b/i;
 const PRODUCT_NAME_STOP = new Set("Today Introducing We Our The This That Read Want Check Get Getting All Join Through System One API SDK AI LLM".toLowerCase().split(" "));
 const STOP = new Set("the a an and or for to of in on with is are now new our your you we i this that from by as at it its introducing launch launched available model api sdk beta preview today just can use using build built open source".split(" "));
 
@@ -57,6 +60,14 @@ export function heatScore(tweet, now = new Date()) {
   );
   const acceleration = Math.min(2, Math.max(0.75, tweet.observed.acceleration || 1));
   return Math.max(snapshotScore, velocityScore * acceleration);
+}
+
+export function hasConcreteArtifact(tweet) {
+  return CONCRETE_BUILD_ACTION.test(tweet.text || "") || CONCRETE_ARTIFACT_CLAIM.test(tweet.text || "");
+}
+
+function isClosedVerticalProduct(tweet) {
+  return CLOSED_VERTICAL.test(tweet.text || "") && !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(tweet.text || "");
 }
 
 export function selectClassificationCandidates(tweets, options = {}) {
@@ -180,6 +191,7 @@ export function findFire(tweets, options = {}) {
       const age = ageHours(tweet, now);
       const decision = decisions.get(tweet.id);
       if (requireDecisions && !decision) return false;
+      if (isClosedVerticalProduct(tweet)) return false;
       const officialLaunchAccount = launchHandles.has(tweet.author?.toLowerCase());
       const selfAnnouncedPublicLaunch =
         OWNED_LAUNCH_WORDS.test(tweet.text) && PUBLIC_ACCESS_WORDS.test(tweet.text);
@@ -254,6 +266,7 @@ export function findFire(tweets, options = {}) {
           decision &&
           decision.builderDemo >= 0.55 &&
           decision.shippedArtifact >= 0.6 &&
+          hasConcreteArtifact(tweet) &&
           (FIRST_PERSON_ARTIFACT.test(tweet.text) || OWN_BUILD_WORDS.test(tweet.text));
         const rulesBuilder =
           OWN_BUILD_WORDS.test(tweet.text) || (tweet.hasMedia && BUILD_ARTIFACT_WORDS.test(tweet.text));

@@ -26,7 +26,7 @@ test("discovers a buildable event from independent posts without a known launch 
   const [cluster] = discoverEventClusters(posts, decisions, { now });
   assert.equal(cluster.key, "pollen3d");
   assert.equal(cluster.rootUnconfirmed, true);
-  assert.equal(cluster.builders.length, 2);
+  assert.equal(cluster.builders.length, 1);
 });
 
 test("merges two launch posts about the same product event", () => {

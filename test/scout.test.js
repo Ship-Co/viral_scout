@@ -422,3 +422,41 @@ test("does not attach a Jev build to Gemini just because the benchmark compares 
   const [item] = findFire([launch, build], { now, minAgeHours: 0, decisions });
   assert.equal(item.builders.length, 0);
 });
+
+test("rejects a closed vertical partner launch even when semantic scoring calls it buildable", () => {
+  const launch = tweet({
+    id: "astra-law",
+    author: "harvey",
+    text: "Harvey is proud to support the launch of Astra for Law.",
+    metrics: { likes: 1000, reposts: 100, replies: 30, quotes: 20, bookmarks: 200, views: 100000 },
+  });
+  const decisions = new Map([[launch.id, {
+    rootLaunch: 0.95,
+    publicAccess: 0.9,
+    buildSurface: 0.9,
+    capabilityNovelty: 2.2,
+    technologyType: "developer_tool",
+  }]]);
+  assert.equal(findFire([launch], { now, minAgeHours: 0, decisions }).length, 0);
+});
+
+test("does not call general experimentation a shipped artifact", () => {
+  const launch = tweet({
+    id: "jev",
+    author: "typesafeai",
+    text: "Jev is now available as a public model API.",
+    metrics: { likes: 2000, reposts: 200, replies: 50, quotes: 40, bookmarks: 500, views: 150000 },
+  });
+  const reaction = tweet({
+    id: "playing",
+    author: "builder",
+    text: "I have been playing with Jev. So many new apps are possible.",
+    hasMedia: true,
+  });
+  const decisions = new Map([
+    [launch.id, { rootLaunch: 0.95, publicAccess: 0.9, buildSurface: 0.9, capabilityNovelty: 2, technologyType: "model_or_api" }],
+    [reaction.id, { builderDemo: 0.9, shippedArtifact: 0.9, commentary: 0.05 }],
+  ]);
+  const [item] = findFire([launch, reaction], { now, minAgeHours: 0, decisions });
+  assert.equal(item.builders.length, 0);
+});

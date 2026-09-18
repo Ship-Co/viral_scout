@@ -1,4 +1,4 @@
-import { ageHours, heatScore, momentum } from "./scout.js";
+import { ageHours, hasConcreteArtifact, heatScore, momentum } from "./scout.js";
 
 const STOP = new Set(`
   about after again against all also and any are because been before being between both but can could did does
@@ -24,7 +24,10 @@ function terms(post) {
   return [...new Map(found.map((item) => [item.term, item])).values()].slice(0, 10);
 }
 
-function decisionIsRelevant(decision) {
+function decisionIsRelevant(post, decision) {
+  const closedVertical = /\bfor\s+(law|legal|financial services|finance|healthcare|government|enterprise)\b/i.test(post.text || "") &&
+    !/\b(api|sdk|cli|open[- ]source|github|plugin|mcp|weights|repository)\b/i.test(post.text || "");
+  if (closedVertical) return false;
   return decision && (
     decision.rootLaunch >= 0.45 ||
     decision.builderDemo >= 0.5 ||
@@ -56,7 +59,7 @@ export function discoverEventClusters(posts, decisions, options = {}) {
 
   for (const post of posts) {
     const decision = decisions.get(post.id);
-    if (!post.author || !decisionIsRelevant(decision) || ageHours(post, now) > 72) continue;
+    if (!post.author || !decisionIsRelevant(post, decision) || ageHours(post, now) > 72) continue;
     for (const { term, label } of terms(post)) {
       const bucket = buckets.get(term) || { term, labels: new Map(), posts: new Map() };
       bucket.labels.set(label, (bucket.labels.get(label) || 0) + 1);
@@ -73,7 +76,7 @@ export function discoverEventClusters(posts, decisions, options = {}) {
     const hot = fresh.filter((post) => heatScore(post, now) >= 0.65);
     const builders = fresh.filter((post) => {
       const decision = decisions.get(post.id);
-      return decision?.builderDemo >= 0.55 && decision?.shippedArtifact >= 0.58;
+      return decision?.builderDemo >= 0.55 && decision?.shippedArtifact >= 0.58 && hasConcreteArtifact(post);
     });
     const buildable = clusterPosts.filter((post) => {
       const decision = decisions.get(post.id);
