@@ -96,7 +96,10 @@ export async function runDailyScout(options = {}) {
     now,
     maxItems: config.maxReportItems * 2,
   });
-  const candidates = mergeFireItems(sourceItems, clusterItems, config.maxReportItems);
+  const candidates = mergeFireItems(sourceItems, clusterItems, config.maxReportItems, {
+    now,
+    modelLaunchHandles: config.modelLaunchHandles,
+  });
   const attribution = await verifyBuilderAssignments(candidates);
   const items = attribution.items;
   const pulse = buildPulse({ items, sourceItems, posts: allPosts, now });

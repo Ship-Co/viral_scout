@@ -145,7 +145,7 @@ export function discoverEventClusters(posts, decisions, options = {}) {
   return selected;
 }
 
-export function mergeFireItems(sourceItems, clusterItems, maxItems = 3) {
+export function mergeFireItems(sourceItems, clusterItems, maxItems = 3, options = {}) {
   const dedupeStop = new Set("today introducing launch launched available release released rolling from with into starting now this that have your".split(" "));
   const eventTokens = (item) => new Set(((item.title || item.launch.text || "").toLowerCase().match(/[a-z0-9][a-z0-9+_.-]{3,}/g) || [])
     .filter((token) => !dedupeStop.has(token)));
@@ -178,7 +178,20 @@ export function mergeFireItems(sourceItems, clusterItems, maxItems = 3) {
       .map((post) => [post.id, post])).values()];
     existing.clusterScore = Math.max(existing.clusterScore || 0, candidate.clusterScore || 0);
   }
-  return merged
-    .sort((a, b) => (b.clusterScore || heatScore(b.launch)) - (a.clusterScore || heatScore(a.launch)))
+  const now = options.now || new Date();
+  const modelLaunchHandles = options.modelLaunchHandles || new Set();
+  const sourceIds = new Set(sourceItems.map((item) => item.launch.id));
+  const ranked = merged.sort((a, b) => (b.clusterScore || heatScore(b.launch, now)) -
+    (a.clusterScore || heatScore(a.launch, now)));
+  const featured = ranked.find((item) => {
+    const decision = item.launch.decision;
+    const age = ageHours(item.launch, now);
+    return sourceIds.has(item.launch.id) && !item.rootUnconfirmed &&
+      modelLaunchHandles.has(item.launch.author?.toLowerCase()) &&
+      decision?.technologyType === "model_or_api" && decision.rootLaunch >= 0.7 &&
+      age >= 0 && age <= 24 && heatScore(item.launch, now) >= 1.75;
+  });
+  if (!featured) return ranked.slice(0, maxItems);
+  return [{ ...featured, featuredModelLaunch: true }, ...ranked.filter((item) => item !== featured)]
     .slice(0, maxItems);
 }

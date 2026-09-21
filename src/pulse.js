@@ -80,7 +80,7 @@ export function buildPulse({ items = [], sourceItems = [], posts = [], now = new
       const selectedName = eventName(selected).toLowerCase();
       return name !== selectedName && selectedName.length >= 3 && name.includes(selectedName);
     });
-    return [{ ...clause, inReport: selectedIds.has(item.launch.id), score: (index < items.length ? 12 - index * 2 : 0)
+    return [{ ...clause, inReport: selectedIds.has(item.launch.id), score: (item.featuredModelLaunch ? 100 : 0) + (index < items.length ? 12 - index * 2 : 0)
       + Math.log1p(item.launch.metrics?.likes || 0) + (relatedToSelected ? 14 : 0) }];
   }).sort((a, b) => b.score - a.score);
 

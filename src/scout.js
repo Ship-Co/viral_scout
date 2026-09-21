@@ -369,7 +369,7 @@ export function formatReport(items, options = {}) {
       ? ` · still spreading across ${new Set(item.currentBuzz.map((tweet) => tweet.author.toLowerCase())).size} hot posts today`
       : "";
     const displayTitle = item.rootUnconfirmed ? item.title : titleFrom(item.launch);
-    lines.push(`• *${slackText(displayTitle)}* — ${metricLine(item.launch, now)}${carryover} · ${tweetLink(item.launch, item.rootUnconfirmed ? "post" : "launch")}`);
+    lines.push(`• ${item.featuredModelLaunch ? "🚀 " : ""}*${slackText(displayTitle)}* — ${metricLine(item.launch, now)}${carryover} · ${tweetLink(item.launch, item.rootUnconfirmed ? "post" : "launch")}`);
     const hotRelated = (item.currentBuzz || [])
       .filter((tweet) => tweet.id !== item.launch.id && ageHours(tweet, now) <= 24)
       .sort((a, b) => (b.metrics?.likes || 0) - (a.metrics?.likes || 0))[0];

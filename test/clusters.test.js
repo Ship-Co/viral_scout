@@ -111,3 +111,40 @@ test("merges two launch posts about the same product event", () => {
   ], [], 3);
   assert.equal(merged.length, 1);
 });
+
+test("a hot first-party model launch leads over a higher-scoring non-model cluster", () => {
+  const model = { ...post("model", "SpaceXAI", "Grok 4.7 is here, now in the API."),
+    metrics: { ...metrics, likes: 1800 },
+    decision: { technologyType: "model_or_api", rootLaunch: 0.9 } };
+  const other = post("other", "builder", "New agent toolkit is everywhere today.");
+  const items = mergeFireItems(
+    [{ launch: model, title: "Grok 4.7", builders: [], currentBuzz: [] }],
+    [{ launch: other, title: "Agent toolkit", builders: [], currentBuzz: [], clusterScore: 999 }],
+    2,
+    { now, modelLaunchHandles: new Set(["spacexai"]) }
+  );
+  assert.deepEqual(items.map((item) => item.launch.id), ["model", "other"]);
+  assert.equal(items[0].featuredModelLaunch, true);
+});
+
+test("rumors, distributors, and stale models do not take the model launch slot", () => {
+  const cases = [
+    { author: "SpaceXAI", createdAt: now.toISOString(), rootLaunch: 0.2 },
+    { author: "OpenRouter", createdAt: now.toISOString(), rootLaunch: 0.95 },
+    { author: "SpaceXAI", createdAt: "2026-09-15T10:00:00.000Z", rootLaunch: 0.95 },
+  ];
+  for (const [index, scenario] of cases.entries()) {
+    const model = { ...post(`model-${index}`, scenario.author, "Grok 4.7 is here."),
+      createdAt: scenario.createdAt,
+      metrics: { ...metrics, likes: 1800 },
+      decision: { technologyType: "model_or_api", rootLaunch: scenario.rootLaunch } };
+    const other = post(`other-${index}`, "builder", "New agent toolkit is everywhere today.");
+    const [first] = mergeFireItems(
+      [{ launch: model, title: "Grok 4.7", builders: [], currentBuzz: [] }],
+      [{ launch: other, title: "Agent toolkit", builders: [], currentBuzz: [], clusterScore: 999 }],
+      2,
+      { now, modelLaunchHandles: new Set(["spacexai"]) }
+    );
+    assert.equal(first.launch.id, other.id);
+  }
+});

@@ -15,6 +15,12 @@ export const config = {
       "OpenAI,OpenAIDevs,ChatGPT,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,SpaceXAI,MistralAI,huggingface,AIatMeta,cursor_ai,typesafeai,github,vercel,replit,lovable,runwayml,midjourney,perplexitydevs"
     ).map((handle) => handle.toLowerCase())
   ),
+  modelLaunchHandles: new Set(
+    split(
+      process.env.MODEL_LAUNCH_HANDLES,
+      "OpenAI,OpenAIDevs,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,SpaceXAI,MistralAI,AIatMeta,typesafeai"
+    ).map((handle) => handle.toLowerCase())
+  ),
   directHandles: new Set(
     split(
       process.env.X_DIRECT_HANDLES,
