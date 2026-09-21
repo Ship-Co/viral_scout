@@ -29,6 +29,61 @@ test("discovers a buildable event from independent posts without a known launch 
   assert.equal(cluster.builders.length, 1);
 });
 
+test("does not invent a Codex launch from posts that only mention the existing platform", () => {
+  const posts = [
+    post("a", "one", "Jev makes Codex agent evaluations cheaper. I built a memory layer."),
+    post("b", "two", "I used Codex to vibe code a game this morning."),
+    post("c", "three", "Codex developers are talking about agent memory today."),
+    post("d", "four", "Here is my Codex game prototype and demo."),
+  ];
+  const decisions = new Map(posts.map((item) => [item.id, {
+    rootLaunch: 0.1,
+    publicAccess: 0.9,
+    buildSurface: 0.9,
+    builderDemo: 0.9,
+    shippedArtifact: 0.9,
+  }]));
+  assert.equal(discoverEventClusters(posts, decisions, { now }).some((cluster) => cluster.key === "codex"), false);
+});
+
+test("keeps a versioned model event found without an official root post", () => {
+  const posts = [
+    post("a", "one", "Grok 4.7 is out with lower latency and a public API."),
+    post("b", "two", "I built a voice app with Grok 4.7 today."),
+    post("c", "three", "Grok 4.7 model tests are spreading fast."),
+    post("d", "four", "Our Grok 4.7 integration is live."),
+  ];
+  const decisions = new Map(posts.map((item) => [item.id, {
+    rootLaunch: 0.1,
+    publicAccess: 0.9,
+    buildSurface: 0.9,
+    builderDemo: 0.9,
+    shippedArtifact: 0.9,
+  }]));
+  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok");
+  assert.match(cluster.title, /Grok 4\.7/);
+});
+
+test("does not promote a quoted reaction into the root launch", () => {
+  const posts = [
+    { ...post("a", "one", "Excited to bring 4.7 to you all! Grok Build is incredibly capable."), isQuote: true },
+    post("b", "two", "Grok 4.7 is now available in Grok Build."),
+    post("c", "three", "My first Grok 4.7 app is live."),
+    post("d", "four", "Testing Grok 4.7 in the public API."),
+  ];
+  const decisions = new Map(posts.map((item) => [item.id, {
+    rootLaunch: item.id === "a" ? 0.98 : 0.1,
+    roleConfidence: 0.95,
+    publicAccess: 0.9,
+    buildSurface: 0.9,
+    builderDemo: 0.8,
+    shippedArtifact: 0.8,
+  }]));
+  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok");
+  assert.equal(cluster.rootUnconfirmed, true);
+  assert.match(cluster.title, /Grok 4\.7/);
+});
+
 test("merges two launch posts about the same product event", () => {
   const first = post("a", "claudeai", "Projects now run from one conversation, starting in Claude Code.");
   const second = post("b", "claudedevs", "Today we're rolling out Projects in Claude Code on desktop and web.");

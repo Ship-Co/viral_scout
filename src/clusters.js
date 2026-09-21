@@ -1,4 +1,4 @@
-import { ageHours, hasConcreteArtifact, heatScore, momentum } from "./scout.js";
+import { ageHours, hasConcreteArtifact, heatScore, launchProductNames, momentum } from "./scout.js";
 
 const STOP = new Set(`
   about after again against all also and any are because been before being between both but can could did does
@@ -39,20 +39,37 @@ function decisionIsRelevant(post, decision) {
   );
 }
 
-function chooseRoot(posts, decisions, now) {
+function chooseRoot(posts, decisions, now, term) {
   const roots = posts.filter((post) => {
     const decision = decisions.get(post.id);
-    return decision?.rootLaunch >= 0.82 &&
+    return !post.isQuote && !post.isReply &&
+      decision?.rootLaunch >= 0.82 &&
       decision?.roleConfidence >= 0.7 &&
       decision?.publicAccess >= 0.5 &&
+      launchProductNames(post).some((name) => name.toLowerCase() === term) &&
       ageHours(post, now) <= 72;
   });
   return roots.sort((a, b) => heatScore(b, now) - heatScore(a, now))[0] || null;
 }
 
 function titleFromPost(post) {
-  const first = (post.text || "").replace(/https?:\/\/\S+/g, "").split(/[\n.!?]/)[0].trim();
+  const first = (post.text || "").replace(/https?:\/\/\S+/g, "").split(/\n|[!?]|\.(?!\d)/)[0].trim();
   return first.length <= 105 ? first : `${first.slice(0, 102).trim()}…`;
+}
+
+function namedRootlessEvent(bucket, posts) {
+  const label = [...bucket.labels.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || bucket.term;
+  const distinctive = /[A-Z]/.test(label.slice(1)) || /\d|[-_.+]/.test(label);
+  const version = posts.map((post) => (post.text || "").match(
+    new RegExp(`\\b${bucket.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+(\\d+(?:\\.\\d+)+)\\b`, "i")
+  )?.[1]).find(Boolean);
+  const announced = posts.some((post) => {
+    const text = post.text || "";
+    const named = bucket.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b(?:introducing|meet|launch(?:ed|ing)?|releas(?:ed|ing)?|now available|open[- ]sourced)\\b.{0,45}\\b${named}\\b`, "i").test(text);
+  });
+  if (!distinctive && !version && !announced) return null;
+  return version ? `${label} ${version}` : label;
 }
 
 export function discoverEventClusters(posts, decisions, options = {}) {
@@ -85,19 +102,19 @@ export function discoverEventClusters(posts, decisions, options = {}) {
       const decision = decisions.get(post.id);
       return decision?.buildSurface >= 0.55 && decision?.publicAccess >= 0.5;
     });
-    const root = chooseRoot(clusterPosts, decisions, now);
+    const root = chooseRoot(clusterPosts, decisions, now, bucket.term);
+    const rootlessName = root ? null : namedRootlessEvent(bucket, fresh);
     const aggregateHeat = hot.reduce((sum, post) => sum + Math.min(heatScore(post, now), 8), 0);
 
     const enoughIndependentSignal = root
       ? authors.size >= 2 && hot.length >= 1
       : authors.size >= 4 && hot.length >= 2;
-    if (!enoughIndependentSignal || buildable.length === 0 || aggregateHeat < 1.5) continue;
+    if (!enoughIndependentSignal || buildable.length === 0 || aggregateHeat < 1.5 || (!root && !rootlessName)) continue;
 
     const representative = root || [...fresh].sort((a, b) => heatScore(b, now) - heatScore(a, now))[0];
-    const label = [...bucket.labels.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || bucket.term;
     candidates.push({
       key: bucket.term,
-      title: root ? titleFromPost(root) : `${label} — emerging buildable tech (root launch unconfirmed)`,
+      title: root ? titleFromPost(root) : `${rootlessName} — emerging buildable tech (root launch unconfirmed)`,
       launch: representative,
       builders: builders.filter((post) => post.id !== representative.id)
         .sort((a, b) => momentum(b, now) - momentum(a, now)).slice(0, 3),
@@ -125,6 +142,9 @@ export function mergeFireItems(sourceItems, clusterItems, maxItems = 3) {
     .filter((token) => !dedupeStop.has(token)));
   const overlaps = (left, right) => {
     if (left.launch.id === right.launch.id) return true;
+    const leftName = launchProductNames(left.launch)[0]?.toLowerCase();
+    const rightName = launchProductNames(right.launch)[0]?.toLowerCase();
+    if (leftName && rightName && leftName !== rightName) return false;
     if (left.clusterPosts?.some((post) => post.id === right.launch.id)) return true;
     if (right.clusterPosts?.some((post) => post.id === left.launch.id)) return true;
     const a = eventTokens(left);

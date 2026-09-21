@@ -91,6 +91,41 @@ test("report stays concise and omits ideation", () => {
   assert.ok(report.length < 1000);
 });
 
+test("keeps decimal model versions intact and shows the stronger related signal", () => {
+  const launch = tweet({
+    id: "root",
+    author: "OpenRouter",
+    text: "Grok 4.7 from SpaceXAI is live on OpenRouter!",
+    metrics: { likes: 200, reposts: 20, replies: 5, quotes: 4, bookmarks: 10, views: 9000 },
+  });
+  const related = tweet({
+    id: "reaction",
+    author: "someone",
+    text: "Grok 4.7 is fast and capable",
+    metrics: { likes: 10000, reposts: 500, replies: 500, quotes: 200, bookmarks: 300, views: 1_000_000 },
+  });
+  const report = formatReport([{ launch, title: "Grok 4.7", builders: [], currentBuzz: [related] }], { now });
+  assert.match(report, /Grok 4\.7 from SpaceXAI/);
+  assert.match(report, /10K-like related post/);
+});
+
+test("keeps DocJev and Open-Jev as separate launches", () => {
+  const docJev = tweet({
+    id: "docjev", author: "jerryjliu0",
+    text: "Introducing DocJev, an open-source document classification library using Jev.",
+    metrics: { likes: 1000, reposts: 100, replies: 30, quotes: 20, bookmarks: 1400, views: 80_000 },
+  });
+  const openJev = tweet({
+    id: "openjev", author: "Zefan_Cai",
+    text: "Introducing Open-Jev, open-source decision models inspired by Jev. Code and weights are public.",
+    metrics: { likes: 1000, reposts: 100, replies: 30, quotes: 20, bookmarks: 1400, views: 80_000 },
+  });
+  const decision = { technologyType: "open_source", rootLaunch: 0.98, publicAccess: 0.95, buildSurface: 0.85, capabilityNovelty: 2 };
+  const decisions = new Map([[docJev.id, decision], [openJev.id, decision]]);
+  const events = findFire([docJev, openJev], { now, decisions, requireDecisions: true });
+  assert.deepEqual(new Set(events.map((event) => event.launch.id)), new Set(["docjev", "openjev"]));
+});
+
 test("does not mistake a benchmark follow-up for a root launch", () => {
   const followup = tweet({
     id: "benchmark",

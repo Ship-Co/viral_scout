@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { verifyBuilderAssignments } from "./attribution.js";
 import { discoverEventClusters, mergeFireItems } from "./clusters.js";
 import { findFire, formatReport, hasHealthyCoverage, selectClassificationCandidates } from "./scout.js";
 import { sendToSlack } from "./slack.js";
@@ -94,7 +95,9 @@ export async function runDailyScout(options = {}) {
     now,
     maxItems: config.maxReportItems * 2,
   });
-  const items = mergeFireItems(sourceItems, clusterItems, config.maxReportItems);
+  const candidates = mergeFireItems(sourceItems, clusterItems, config.maxReportItems);
+  const attribution = await verifyBuilderAssignments(candidates);
+  const items = attribution.items;
   const report = formatReport(items, { now });
 
   if (send && coverageHealthy && classificationHealthy) {
@@ -119,6 +122,9 @@ export async function runDailyScout(options = {}) {
     jevCandidates: allCandidates.length,
     jevCoverage: classifiedCount,
     jevFailures: result.classification.failed,
+    builderCandidatesChecked: attribution.checked,
+    verifiedBuilders: attribution.accepted,
+    builderVerificationHealthy: attribution.healthy,
     sent: send && coverageHealthy && classificationHealthy,
     coverageHealthy,
     classificationHealthy,

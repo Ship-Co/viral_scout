@@ -11,7 +11,7 @@ const CONCRETE_ARTIFACT_CLAIM = /\b(my|our)\b.{0,100}\b(prototype|app|tool|workf
 const PROMOTIONAL_WORDS = /\b(you can build|lets? (?:you|developers) build|everyone build|start building|build your own)\b/i;
 const TECHNOLOGY_CONTEXT = /\b(ai|llm|model|api|sdk|cli|agent|coding|developer|open[- ]source|github|plugin|mcp|inference|multimodal|voice|video|image|3d|robot|benchmark|weights|checkpoint|framework|database|browser|automation)\b/i;
 const CLOSED_VERTICAL = /\bfor\s+(law|legal|financial services|finance|healthcare|government|enterprise)\b/i;
-const PRODUCT_NAME_STOP = new Set("Today Introducing We Our The This That Read Want Check Get Getting All Join Through System One API SDK AI LLM".toLowerCase().split(" "));
+const PRODUCT_NAME_STOP = new Set("Today Introducing We Our The This That Read Want Check Get Getting All Join Through System One API SDK AI LLM Your Next Now Meet People Inspired After Before From Here There More New Open Source Start Welcome What Another Faster Using Available Just First".toLowerCase().split(" "));
 const STOP = new Set("the a an and or for to of in on with is are now new our your you we i this that from by as at it its introducing launch launched available model api sdk beta preview today just can use using build built open source".split(" "));
 
 export function ageHours(tweet, now = new Date()) {
@@ -142,18 +142,27 @@ function topicPhrases(tweet) {
 
 function productNames(tweet) {
   const names = [];
-  for (const match of tweet.text.matchAll(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g)) {
+  const text = (tweet.text || "").replace(/https?:\/\/\S+/g, "");
+  for (const match of text.matchAll(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g)) {
     const name = match[0];
     if (!PRODUCT_NAME_STOP.has(name.toLowerCase())) names.push(name);
   }
   return [...new Set(names)].slice(0, 6);
 }
 
+export function launchProductNames(tweet) {
+  const text = tweet.text || "";
+  const introduction = text.match(/\b(?:introducing|meet|launched|releasing|announcing)\s+([A-Z][A-Za-z0-9_-]{2,})\b/i);
+  const capitalized = productNames(tweet);
+  if (!introduction || !/^[A-Z]/.test(introduction[1])) return capitalized.slice(0, 3);
+  const primary = introduction[1];
+  return [primary];
+}
+
 function relatesTo(builder, launch) {
   const lower = builder.text.toLowerCase();
-  const primaryName = launch.names[0];
-  if (primaryName) {
-    return new RegExp(`\\b${primaryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(builder.text);
+  if (launch.names.length) {
+    return launch.names.some((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(builder.text));
   }
   if (launch.phrases.some((phrase) => lower.includes(phrase))) return true;
   const tokens = launch.tokens.filter((token) => token.length >= 4);
@@ -173,8 +182,8 @@ function relatesBuilderToLaunch(builder, launch) {
 }
 
 function titleFrom(tweet) {
-  const first = tweet.text.replace(/https?:\/\/\S+/g, "").split(/[\n.!?]/)[0].trim();
-  const name = productNames(tweet)[0];
+  const first = tweet.text.replace(/https?:\/\/\S+/g, "").split(/\n|[!?]|\.(?!\d)/)[0].trim();
+  const name = launchProductNames(tweet)[0];
   const title = name && !first.toLowerCase().includes(name.toLowerCase()) ? `${name} — ${first}` : first;
   return title.length <= 105 ? title : `${title.slice(0, 102).trim()}…`;
 }
@@ -231,7 +240,7 @@ export function findFire(tweets, options = {}) {
       decision: decisions.get(tweet.id),
       tokens: topicTokens(tweet),
       phrases: topicPhrases(tweet),
-      names: productNames(tweet).map((name) => name.toLowerCase()),
+      names: launchProductNames(tweet).map((name) => name.toLowerCase()),
     }))
     .sort((a, b) => {
       const aNovelty = a.decision?.capabilityNovelty || 0;
@@ -242,6 +251,7 @@ export function findFire(tweets, options = {}) {
   const deduped = [];
   for (const launch of launches) {
     const overlaps = deduped.some((existing) => {
+      if (launch.names[0] && existing.names[0] && launch.names[0] !== existing.names[0]) return false;
       if (launch.phrases.some((phrase) => existing.phrases.includes(phrase))) return true;
       const shared = launch.tokens.filter((token) => existing.tokens.includes(token));
       const smaller = Math.max(1, Math.min(launch.tokens.length, existing.tokens.length));
@@ -326,6 +336,13 @@ export function formatReport(items, options = {}) {
     const displayTitle = item.rootUnconfirmed ? item.title : titleFrom(item.launch);
     lines.push(`• *${displayTitle}* — ${metricLine(item.launch, now)}${carryover}`);
     lines.push(`  ${tweetUrl(item.launch)}`);
+    const hotRelated = (item.currentBuzz || [])
+      .filter((tweet) => tweet.id !== item.launch.id && ageHours(tweet, now) <= 24)
+      .sort((a, b) => (b.metrics?.likes || 0) - (a.metrics?.likes || 0))[0];
+    if (hotRelated && hotRelated.metrics.likes >= 1000 &&
+      hotRelated.metrics.likes >= 3 * Math.max(1, item.launch.metrics.likes)) {
+      lines.push(`  ↳ ${compact(hotRelated.metrics.likes)}-like related post: ${tweetUrl(hotRelated)}`);
+    }
   }
 
   const withBuilders = items.filter((item) => item.builders.length > 0);
@@ -337,7 +354,7 @@ export function formatReport(items, options = {}) {
         if (shownBuilderIds.has(builder.id)) continue;
         shownBuilderIds.add(builder.id);
         const summary = builder.text.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
-        const label = productNames(item.launch)[0] || item.title;
+        const label = launchProductNames(item.launch)[0] || item.title;
         lines.push(`• *${label}:* ${summary.slice(0, 120)}${summary.length > 120 ? "…" : ""}`);
         lines.push(`  ${tweetUrl(builder)}`);
       }
