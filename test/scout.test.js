@@ -149,6 +149,41 @@ test("a model release only uses same-version posts as buzz or builds", () => {
   assert.deepEqual(event.builders.map((post) => post.id), ["current"]);
 });
 
+test("keeps the maker's hot root post when a same-product thread confirms public access", () => {
+  const root = tweet({
+    id: "official-root", author: "SpaceXAI", text: "Grok 4.7 is here. A notable improvement over 4.6.",
+    metrics: { likes: 19_000, reposts: 1000, replies: 300, quotes: 100, bookmarks: 1000, views: 2_000_000 },
+  });
+  const access = tweet({
+    id: "official-access", author: "SpaceXAI", text: "Grok 4.7 is available now in Cursor, Grok Build, and the Grok API.",
+    createdAt: "2026-09-11T05:02:00.000Z",
+    metrics: { likes: 2000, reposts: 100, replies: 30, quotes: 10, bookmarks: 100, views: 100_000 },
+  });
+  const decisions = new Map([
+    [root.id, { technologyType: "model_or_api", rootLaunch: 0.79, publicAccess: 0.36, buildSurface: 0.72, capabilityNovelty: 0.96 }],
+    [access.id, { technologyType: "model_or_api", rootLaunch: 0.73, publicAccess: 0.98, buildSurface: 0.86, capabilityNovelty: 1.01 }],
+  ]);
+  const options = { now, decisions, launchHandles: new Set(["spacexai"]), requireDecisions: true };
+  assert.equal(findFire([root], options).length, 0);
+  assert.equal(findFire([root, access], options)[0].launch.id, root.id);
+});
+
+test("deduplicates a model launch and a router's same-version availability post", () => {
+  const official = tweet({
+    id: "official", author: "SpaceXAI", text: "Grok 4.7 is here. Available in the API.",
+    metrics: { likes: 19_000, reposts: 1000, replies: 300, quotes: 100, bookmarks: 1000, views: 2_000_000 },
+  });
+  const router = tweet({
+    id: "router", author: "OpenRouter", text: "Grok 4.7 is live on OpenRouter with public API access.",
+    metrics: { likes: 200, reposts: 10, replies: 4, quotes: 2, bookmarks: 15, views: 10_000 },
+  });
+  const decision = { technologyType: "model_or_api", rootLaunch: 0.98, publicAccess: 0.95, buildSurface: 0.9, capabilityNovelty: 2 };
+  const result = findFire([official, router], {
+    now, decisions: new Map([[official.id, decision], [router.id, decision]]), requireDecisions: true,
+  });
+  assert.deepEqual(result.map((item) => item.launch.id), [official.id]);
+});
+
 test("does not mistake a benchmark follow-up for a root launch", () => {
   const followup = tweet({
     id: "benchmark",

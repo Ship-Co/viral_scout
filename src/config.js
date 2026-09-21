@@ -12,13 +12,13 @@ export const config = {
   launchHandles: new Set(
     split(
       process.env.LAUNCH_HANDLES,
-      "OpenAI,OpenAIDevs,ChatGPT,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,MistralAI,huggingface,AIatMeta,cursor_ai,typesafeai,github,vercel,replit,lovable,runwayml,midjourney,perplexitydevs"
+      "OpenAI,OpenAIDevs,ChatGPT,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,SpaceXAI,MistralAI,huggingface,AIatMeta,cursor_ai,typesafeai,github,vercel,replit,lovable,runwayml,midjourney,perplexitydevs"
     ).map((handle) => handle.toLowerCase())
   ),
   directHandles: new Set(
     split(
       process.env.X_DIRECT_HANDLES,
-      "OpenAI,OpenAIDevs,ChatGPT,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,MistralAI,huggingface,AIatMeta,cursor_ai,typesafeai"
+      "OpenAI,OpenAIDevs,ChatGPT,AnthropicAI,ClaudeDevs,GoogleDeepMind,GoogleAI,xai,SpaceXAI,MistralAI,huggingface,AIatMeta,cursor_ai,typesafeai"
     ).map((handle) => handle.toLowerCase())
   ),
   lookbackHours: Number(process.env.LOOKBACK_HOURS || 24),

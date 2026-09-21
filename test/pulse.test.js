@@ -21,12 +21,12 @@ test("pulse links an off-report launch and labels future model talk as unconfirm
   ];
   const pulse = buildPulse({ items: [jev, grok], sourceItems: [jev, grok, openJev], posts: rumors, now });
   assert.deepEqual(pulse.map((clause) => clause.text), [
-    "Jev still hot", "Open-Jev launched", "new OpenAI GPT-6 model might come out tomorrow (unconfirmed)",
+    "Jev still hot", "Open-Jev launched today", "new OpenAI GPT-6 model might come out tomorrow (unconfirmed)",
   ]);
   assert.equal(pulse[1].post.id, "openjev");
   assert.equal(pulse[2].post.id, "tomorrow");
   const report = formatReport([jev, grok], { now, pulse });
-  assert.match(report, /\*Pulse:\* Jev still hot; Open-Jev launched <https:\/\/x\.com\/Zefan_Cai\/status\/openjev\|post>/);
+  assert.match(report, /\*Pulse:\* Jev still hot; Open-Jev launched today <https:\/\/x\.com\/Zefan_Cai\/status\/openjev\|post>/);
   assert.match(report, /<https:\/\/x\.com\/commentator\/status\/tomorrow\|post>/);
 });
 
@@ -51,6 +51,11 @@ test("pulse does not repeat launch rumors after a confirmed root launch appears"
   ];
   const pulse = buildPulse({ items: [launched], sourceItems: [launched], posts: rumors, now });
   assert.deepEqual(pulse.map((clause) => clause.text), ["GPT-6 live"]);
+});
+
+test("a same-day first-party model launch is described as launched today", () => {
+  const grok = item(post("grok", "SpaceXAI", "Grok 4.7 is here. A notable improvement over 4.6.", 2, 19000));
+  assert.deepEqual(buildPulse({ items: [grok], sourceItems: [grok], now }).map((clause) => clause.text), ["Grok 4.7 launched today"]);
 });
 
 test("yesterday's 'tomorrow' rumor is not presented as tomorrow today", () => {

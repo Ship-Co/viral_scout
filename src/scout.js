@@ -159,7 +159,7 @@ export function launchProductNames(tweet) {
   return primary ? [primary] : capitalized.slice(0, 3);
 }
 
-function versionedProductName(tweet) {
+export function versionedProductName(tweet) {
   const name = launchProductNames(tweet)[0];
   if (!name) return null;
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -227,6 +227,17 @@ export function findFire(tweets, options = {}) {
         decision.buildSurface >= 0.3 &&
         (decision.capabilityNovelty >= 1.45 ||
           (decision.capabilityNovelty >= 1.2 && heatScore(tweet, now) >= 1.75));
+      const product = versionedProductName(tweet) || launchProductNames(tweet)[0];
+      const officialThreadAccess = officialLaunchAccount && decision?.rootLaunch >= 0.7 &&
+        decision?.buildSurface >= 0.55 && reusableTechnology && product &&
+        tweets.some((other) => {
+          if (other.id === tweet.id || other.author?.toLowerCase() !== tweet.author.toLowerCase()) return false;
+          if (Math.abs(new Date(other.createdAt) - new Date(tweet.createdAt)) > 2 * 3_600_000) return false;
+          const otherDecision = decisions.get(other.id);
+          if (!otherDecision || otherDecision.publicAccess < 0.75 || otherDecision.buildSurface < 0.5) return false;
+          const otherProduct = versionedProductName(other) || launchProductNames(other)[0];
+          return otherProduct?.toLowerCase() === product.toLowerCase();
+        });
       const rulesLaunch =
         (officialLaunchAccount || selfAnnouncedPublicLaunch) &&
         LAUNCH_WORDS.test(tweet.text) &&
@@ -238,7 +249,7 @@ export function findFire(tweets, options = {}) {
         age <= rootContextHours &&
         !tweet.isReply &&
         !tweet.isQuote &&
-        (decision ? semanticLaunch : rulesLaunch) &&
+        (decision ? (semanticLaunch || officialThreadAccess) : rulesLaunch) &&
         isActuallyHot(tweet, now)
       );
     })
@@ -260,6 +271,9 @@ export function findFire(tweets, options = {}) {
   const deduped = [];
   for (const launch of launches) {
     const overlaps = deduped.some((existing) => {
+      const leftVersion = versionedProductName(launch)?.toLowerCase();
+      const rightVersion = versionedProductName(existing)?.toLowerCase();
+      if (leftVersion && rightVersion) return leftVersion === rightVersion;
       if (launch.names[0] && existing.names[0] && launch.names[0] !== existing.names[0]) return false;
       if (launch.phrases.some((phrase) => existing.phrases.includes(phrase))) return true;
       const shared = launch.tokens.filter((token) => existing.tokens.includes(token));

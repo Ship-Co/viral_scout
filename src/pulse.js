@@ -30,7 +30,7 @@ function eventClause(item, now) {
   if (/\b(now available|is live|out now|available to everyone|available today)\b/i.test(text)) {
     return { text: `${name} live`, post: item.launch };
   }
-  return { text: `${name} launched`, post: item.launch };
+  return { text: `${name} launched${amsterdamDay(item.launch.createdAt) === amsterdamDay(now) ? " today" : ""}`, post: item.launch };
 }
 
 function rumorClause(posts, now) {

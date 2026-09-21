@@ -1,4 +1,4 @@
-import { ageHours, hasConcreteArtifact, heatScore, launchProductNames, momentum } from "./scout.js";
+import { ageHours, hasConcreteArtifact, heatScore, launchProductNames, momentum, versionedProductName } from "./scout.js";
 
 const STOP = new Set(`
   about after again against all also and any are because been before being between both but can could did does
@@ -151,6 +151,9 @@ export function mergeFireItems(sourceItems, clusterItems, maxItems = 3) {
     .filter((token) => !dedupeStop.has(token)));
   const overlaps = (left, right) => {
     if (left.launch.id === right.launch.id) return true;
+    const leftVersion = versionedProductName(left.launch)?.toLowerCase();
+    const rightVersion = versionedProductName(right.launch)?.toLowerCase();
+    if (leftVersion && rightVersion) return leftVersion === rightVersion;
     const leftName = launchProductNames(left.launch)[0]?.toLowerCase();
     const rightName = launchProductNames(right.launch)[0]?.toLowerCase();
     if (leftName && rightName && leftName !== rightName) return false;
