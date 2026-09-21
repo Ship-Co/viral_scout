@@ -50,6 +50,7 @@ function rumorClause(posts, now) {
       authors: new Set(related.map((post) => post.author?.toLowerCase()).filter(Boolean)).size,
       score: related.reduce((sum, post) => sum + Math.min(heatScore(post, now), 8), 0),
       tomorrow: related.some((post) => /\btomorrow\b/i.test(post.text) && amsterdamDay(post.createdAt) === amsterdamDay(now)),
+      openAI: related.some((post) => /\bOpenAI\b/i.test(post.text)),
     }))
     .filter((group) => group.authors >= 2 && group.score >= 1.5)
     .sort((a, b) => b.score - a.score);
@@ -61,7 +62,7 @@ function rumorClause(posts, now) {
   const strongest = [...evidence].sort((a, b) => heatScore(b, now) - heatScore(a, now))[0];
   return {
     model: top.model,
-    text: `${top.model} ${top.tomorrow ? "tomorrow" : "launch"} chatter (unconfirmed)`,
+    text: `new ${top.openAI ? "OpenAI " : ""}${top.model} model might come out ${top.tomorrow ? "tomorrow" : "soon"} (unconfirmed)`,
     post: strongest,
   };
 }

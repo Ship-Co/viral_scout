@@ -16,12 +16,12 @@ test("pulse links an off-report launch and labels future model talk as unconfirm
   const grok = item(post("grok", "OpenRouter", "Grok 4.7 is live on OpenRouter", 2, 2000));
   const openJev = item(post("openjev", "Zefan_Cai", "Inspired by Jev, we built Open-Jev: open-source decision models with code and weights.", 4, 300));
   const rumors = [
-    post("scoop", "reporter", "SCOOP: final stages of preparations for the launch of GPT-6 Sol, shipping imminently", 3, 2000),
+    post("scoop", "reporter", "SCOOP: OpenAI in final stages of preparations for the launch of GPT-6 Sol, shipping imminently", 3, 2000),
     post("tomorrow", "commentator", "Rumors of GPT-6 dropping as early as tomorrow", 2, 100),
   ];
   const pulse = buildPulse({ items: [jev, grok], sourceItems: [jev, grok, openJev], posts: rumors, now });
   assert.deepEqual(pulse.map((clause) => clause.text), [
-    "Jev still hot", "Open-Jev launched", "GPT-6 tomorrow chatter (unconfirmed)",
+    "Jev still hot", "Open-Jev launched", "new OpenAI GPT-6 model might come out tomorrow (unconfirmed)",
   ]);
   assert.equal(pulse[1].post.id, "openjev");
   assert.equal(pulse[2].post.id, "tomorrow");
@@ -59,5 +59,5 @@ test("yesterday's 'tomorrow' rumor is not presented as tomorrow today", () => {
     post("b", "two", "GPT-6 launch expected soon", 23, 1000),
   ];
   const pulse = buildPulse({ posts: earlier, now });
-  assert.deepEqual(pulse.map((clause) => clause.text), ["GPT-6 launch chatter (unconfirmed)"]);
+  assert.deepEqual(pulse.map((clause) => clause.text), ["new GPT-6 model might come out soon (unconfirmed)"]);
 });
