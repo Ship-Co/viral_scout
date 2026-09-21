@@ -3,7 +3,24 @@ import { launchProductNames } from "./scout.js";
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 
 function eventName(item) {
-  return (item.rootUnconfirmed ? item.key : launchProductNames(item.launch)[0]) || item.title || "unknown launch";
+  if (item.rootUnconfirmed) return item.title?.split(" — ")[0] || item.key || "unknown launch";
+  const product = launchProductNames(item.launch)[0];
+  if (!product) return item.title || "unknown launch";
+  const escaped = product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const version = (item.launch.text || "").match(new RegExp(`\\b${escaped}\\s+(\\d+(?:\\.\\d+)+)\\b`, "i"))?.[1];
+  return version ? `${product} ${version}` : product;
+}
+
+function explicitlyNamesEvent(post, item) {
+  const name = eventName(item);
+  if (!name || name === "unknown launch") return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const text = post.text || "";
+  const named = new RegExp(`(?:^|[^A-Za-z0-9_-])${escaped}(?=$|[^A-Za-z0-9_-])`, "i");
+  if (!named.test(text)) return false;
+  const inspirationOnly = new RegExp(`\\b(?:inspired by|alternative to|competitor to)\\s+${escaped}(?=$|[^A-Za-z0-9_-])`, "i");
+  const actualUse = new RegExp(`\\b(?:used?|using|with|via|powered by|built with|made with|created with)\\s+(?:the\\s+)?${escaped}(?=$|[^A-Za-z0-9_-])`, "i");
+  return !inspirationOnly.test(text) || actualUse.test(text);
 }
 
 export function buildAttributionRequest(items) {
@@ -48,7 +65,7 @@ export function applyAttribution(items, posts, answers) {
     const eventIndex = Number(answer?.choice?.match(/^event_(\d+)$/)?.[1]);
     if (!Number.isInteger(eventIndex) || eventIndex < 0 || eventIndex >= items.length) continue;
     const probability = answer.probabilities?.[`event_${eventIndex}`] || 0;
-    if (probability < 0.7 || (answer.confidence ?? 0) < 0.5) continue;
+    if (probability < 0.7 || (answer.confidence ?? 0) < 0.5 || !explicitlyNamesEvent(posts[index], items[eventIndex])) continue;
     assigned.set(posts[index].id, eventIndex);
   }
   return items.map((item, index) => ({

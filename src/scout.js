@@ -153,14 +153,23 @@ function productNames(tweet) {
 export function launchProductNames(tweet) {
   const text = tweet.text || "";
   const introduction = text.match(/\b(?:introducing|meet|launched|releasing|announcing)\s+([A-Z][A-Za-z0-9_-]{2,})\b/i);
+  const selfBuilt = text.match(/\b(?:i|we)\s+(?:just\s+)?(?:built|shipped|released|launched|open[- ]sourced|made)\s+([A-Z][A-Za-z0-9_-]{2,})\b/i);
   const capitalized = productNames(tweet);
-  if (!introduction || !/^[A-Z]/.test(introduction[1])) return capitalized.slice(0, 3);
-  const primary = introduction[1];
-  return [primary];
+  const primary = [introduction?.[1], selfBuilt?.[1]].find((name) => name && /^[A-Z]/.test(name) && !PRODUCT_NAME_STOP.has(name.toLowerCase()));
+  return primary ? [primary] : capitalized.slice(0, 3);
+}
+
+function versionedProductName(tweet) {
+  const name = launchProductNames(tweet)[0];
+  if (!name) return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return (tweet.text || "").match(new RegExp(`\\b${escaped}\\s+\\d+(?:\\.\\d+)+\\b`, "i"))?.[0] || null;
 }
 
 function relatesTo(builder, launch) {
   const lower = builder.text.toLowerCase();
+  const versionedName = versionedProductName(launch);
+  if (versionedName && !new RegExp(`\\b${versionedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}\\b`, "i").test(builder.text)) return false;
   if (launch.names.length) {
     return launch.names.some((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(builder.text));
   }
@@ -171,12 +180,12 @@ function relatesTo(builder, launch) {
 
 function relatesBuilderToLaunch(builder, launch) {
   const text = builder.text || "";
-  const explicit = text.match(/\b(?:used|using|via|powered by|built with|made with|created with|added)\s+(?:the\s+)?@?([A-Za-z][A-Za-z0-9_.+-]*)/i) ||
+  const explicit = text.match(/\b(?:used|using|via|with|powered by|built with|made with|created with|added)\s+(?:the\s+)?@?([A-Za-z][A-Za-z0-9_.+-]*)/i) ||
     text.match(/\bbuilt\s+(?:a|an|the\s+)?@?([A-Za-z][A-Za-z0-9_.+-]*)/i);
   if (explicit) {
     const tool = explicit[1].toLowerCase();
-    const filler = new Set(["a", "an", "the", "my", "our", "this", "new", "same"]);
-    if (!filler.has(tool)) return launch.names.some((name) => name === tool);
+    const filler = new Set(["a", "an", "the", "my", "our", "this", "new", "same", "app", "tool", "game", "demo", "prototype"]);
+    if (!filler.has(tool)) return launch.names.some((name) => name === tool) && relatesTo(builder, launch);
   }
   return relatesTo(builder, launch);
 }
@@ -319,6 +328,14 @@ function tweetUrl(tweet) {
   return `https://x.com/${tweet.author}/status/${tweet.id}`;
 }
 
+function slackText(value) {
+  return String(value).replace(/&amp;/g, "&").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function tweetLink(tweet, label) {
+  return `<${tweetUrl(tweet)}|${label}>`;
+}
+
 export function formatReport(items, options = {}) {
   const now = options.now || new Date();
   const date = new Intl.DateTimeFormat("en-GB", {
@@ -334,14 +351,13 @@ export function formatReport(items, options = {}) {
       ? ` · still spreading across ${new Set(item.currentBuzz.map((tweet) => tweet.author.toLowerCase())).size} hot posts today`
       : "";
     const displayTitle = item.rootUnconfirmed ? item.title : titleFrom(item.launch);
-    lines.push(`• *${displayTitle}* — ${metricLine(item.launch, now)}${carryover}`);
-    lines.push(`  ${tweetUrl(item.launch)}`);
+    lines.push(`• *${slackText(displayTitle)}* — ${metricLine(item.launch, now)}${carryover} · ${tweetLink(item.launch, item.rootUnconfirmed ? "post" : "launch")}`);
     const hotRelated = (item.currentBuzz || [])
       .filter((tweet) => tweet.id !== item.launch.id && ageHours(tweet, now) <= 24)
       .sort((a, b) => (b.metrics?.likes || 0) - (a.metrics?.likes || 0))[0];
     if (hotRelated && hotRelated.metrics.likes >= 1000 &&
       hotRelated.metrics.likes >= 3 * Math.max(1, item.launch.metrics.likes)) {
-      lines.push(`  ↳ ${compact(hotRelated.metrics.likes)}-like related post: ${tweetUrl(hotRelated)}`);
+      lines.push(`  ↳ ${compact(hotRelated.metrics.likes)}-like ${tweetLink(hotRelated, "related post")}`);
     }
   }
 
@@ -355,8 +371,7 @@ export function formatReport(items, options = {}) {
         shownBuilderIds.add(builder.id);
         const summary = builder.text.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
         const label = launchProductNames(item.launch)[0] || item.title;
-        lines.push(`• *${label}:* ${summary.slice(0, 120)}${summary.length > 120 ? "…" : ""}`);
-        lines.push(`  ${tweetUrl(builder)}`);
+        lines.push(`• *${slackText(label)}:* ${slackText(summary.slice(0, 120))}${summary.length > 120 ? "…" : ""} · ${tweetLink(builder, "build")}`);
       }
     }
   }

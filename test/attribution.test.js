@@ -32,6 +32,7 @@ const game = {
 test("extracts the exact child product instead of its parent model or the first sentence", () => {
   assert.deepEqual(launchProductNames(docJev), ["DocJev"]);
   assert.deepEqual(launchProductNames(studioTwin), ["ConceptLab"]);
+  assert.deepEqual(launchProductNames(openJev), ["Open-Jev"]);
 });
 
 test("attribution questions distinguish the specific launch from related but separate products", () => {
@@ -67,6 +68,34 @@ test("retains only a confidently attributed artifact", async () => {
   });
   assert.deepEqual(result.items[0].builders.map((post) => post.id), ["docjev-build"]);
   assert.equal(result.accepted, 1);
+});
+
+test("rejects a confident but incorrect model match without the exact launched product", () => {
+  const wrong = { choice: "event_0", confidence: 0.99, probabilities: { event_0: 0.99 } };
+  const items = [{ launch: docJev, builders: [openJev, effort] }];
+  const { posts } = buildAttributionRequest(items);
+  const result = applyAttribution(items, posts, { match_0: wrong, match_1: wrong });
+  assert.deepEqual(result[0].builders, []);
+});
+
+test("requires the specific model version for versioned launch builds", () => {
+  const root = { text: "Grok 4.7 is live on OpenRouter", author: "OpenRouter" };
+  const older = { id: "older", text: "I built an app with Grok 4.6", author: "builder" };
+  const current = { id: "current", text: "I built an app with Grok 4.7", author: "builder2" };
+  const items = [{ launch: root, builders: [older, current] }];
+  const { posts, body } = buildAttributionRequest(items);
+  assert.equal(body.state.events[0].name, "Grok 4.7");
+  const positive = { choice: "event_0", confidence: 0.99, probabilities: { event_0: 0.99 } };
+  const result = applyAttribution(items, posts, { match_0: positive, match_1: positive });
+  assert.deepEqual(result[0].builders.map((post) => post.id), ["current"]);
+});
+
+test("does not call an independent Jev alternative a Jev build even if the model does", () => {
+  const jev = { text: "Jev is now available to everyone", author: "typesafeai" };
+  const items = [{ launch: jev, builders: [openJev] }];
+  const { posts } = buildAttributionRequest(items);
+  const positive = { choice: "event_0", confidence: 0.99, probabilities: { event_0: 0.99 } };
+  assert.deepEqual(applyAttribution(items, posts, { match_0: positive })[0].builders, []);
 });
 
 test("omits uncertain builder links when the attribution service fails", async () => {

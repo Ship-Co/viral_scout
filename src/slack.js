@@ -1,22 +1,26 @@
-export async function sendToSlack(text) {
-  if (process.env.SLACK_WEBHOOK_URL) {
-    const response = await fetch(process.env.SLACK_WEBHOOK_URL, {
+export async function sendToSlack(text, options = {}) {
+  const webhookUrl = options.webhookUrl ?? process.env.SLACK_WEBHOOK_URL;
+  const botToken = options.botToken ?? process.env.SLACK_BOT_TOKEN;
+  const channelId = options.channelId ?? process.env.SLACK_CHANNEL_ID;
+  const fetchImpl = options.fetchImpl || fetch;
+  if (webhookUrl) {
+    const response = await fetchImpl(webhookUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, unfurl_links: false }),
+      body: JSON.stringify({ text, unfurl_links: false, unfurl_media: false }),
     });
     if (!response.ok) throw new Error(`Slack webhook failed (${response.status}): ${await response.text()}`);
     return;
   }
 
-  if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID) {
-    const response = await fetch("https://slack.com/api/chat.postMessage", {
+  if (botToken && channelId) {
+    const response = await fetchImpl("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: {
-        authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+        authorization: `Bearer ${botToken}`,
         "content-type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ channel: process.env.SLACK_CHANNEL_ID, text, unfurl_links: false }),
+      body: JSON.stringify({ channel: channelId, text, unfurl_links: false, unfurl_media: false }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(`Slack API failed: ${result.error || response.status}`);

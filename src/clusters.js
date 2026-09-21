@@ -19,7 +19,12 @@ function terms(post) {
     const term = raw.toLowerCase();
     if (term.length < 3 || STOP.has(term) || term === "t.co" || term === post.author?.toLowerCase() || /^https?$/.test(term)) continue;
     const distinctive = /[A-Z]/.test(raw.slice(1)) || /\d|[_.+-]/.test(raw) || match[0].startsWith("@") || match[0].startsWith("#");
-    if (distinctive || raw[0] === raw[0].toUpperCase()) found.push({ term, label: raw });
+    if (distinctive || raw[0] === raw[0].toUpperCase()) {
+      const version = (post.text || "").slice(match.index + match[0].length).match(/^\s+(\d+(?:\.\d+)+)\b/)?.[1];
+      found.push(version
+        ? { term: `${term} ${version}`, label: `${raw} ${version}` }
+        : { term, label: raw });
+    }
   }
   return [...new Map(found.map((item) => [item.term, item])).values()].slice(0, 10);
 }
@@ -40,13 +45,16 @@ function decisionIsRelevant(post, decision) {
 }
 
 function chooseRoot(posts, decisions, now, term) {
+  const versioned = term.match(/^(.+?) (\d+(?:\.\d+)+)$/);
   const roots = posts.filter((post) => {
     const decision = decisions.get(post.id);
+    const product = versioned ? versioned[1] : term;
+    const exactVersion = !versioned || new RegExp(`\\b${product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+${versioned[2].replace(/\./g, "\\.")}\\b`, "i").test(post.text || "");
     return !post.isQuote && !post.isReply &&
       decision?.rootLaunch >= 0.82 &&
       decision?.roleConfidence >= 0.7 &&
       decision?.publicAccess >= 0.5 &&
-      launchProductNames(post).some((name) => name.toLowerCase() === term) &&
+      exactVersion && launchProductNames(post).some((name) => name.toLowerCase() === product) &&
       ageHours(post, now) <= 72;
   });
   return roots.sort((a, b) => heatScore(b, now) - heatScore(a, now))[0] || null;
@@ -59,6 +67,7 @@ function titleFromPost(post) {
 
 function namedRootlessEvent(bucket, posts) {
   const label = [...bucket.labels.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || bucket.term;
+  if (/ \d+(?:\.\d+)+$/.test(bucket.term)) return label;
   const distinctive = /[A-Z]/.test(label.slice(1)) || /\d|[-_.+]/.test(label);
   const version = posts.map((post) => (post.text || "").match(
     new RegExp(`\\b${bucket.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+(\\d+(?:\\.\\d+)+)\\b`, "i")

@@ -60,7 +60,7 @@ test("keeps a versioned model event found without an official root post", () => 
     builderDemo: 0.9,
     shippedArtifact: 0.9,
   }]));
-  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok");
+  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok 4.7");
   assert.match(cluster.title, /Grok 4\.7/);
 });
 
@@ -70,6 +70,7 @@ test("does not promote a quoted reaction into the root launch", () => {
     post("b", "two", "Grok 4.7 is now available in Grok Build."),
     post("c", "three", "My first Grok 4.7 app is live."),
     post("d", "four", "Testing Grok 4.7 in the public API."),
+    post("e", "five", "Our Grok 4.7 integration is live."),
   ];
   const decisions = new Map(posts.map((item) => [item.id, {
     rootLaunch: item.id === "a" ? 0.98 : 0.1,
@@ -79,9 +80,26 @@ test("does not promote a quoted reaction into the root launch", () => {
     builderDemo: 0.8,
     shippedArtifact: 0.8,
   }]));
-  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok");
+  const cluster = discoverEventClusters(posts, decisions, { now }).find((item) => item.key === "grok 4.7");
   assert.equal(cluster.rootUnconfirmed, true);
   assert.match(cluster.title, /Grok 4\.7/);
+});
+
+test("does not combine independent posts about different versions into one event", () => {
+  const posts = ["4.7", "4.6"].flatMap((version) => [
+    post(`${version}-a`, `one-${version}`, `Grok ${version} is live in the public API.`),
+    post(`${version}-b`, `two-${version}`, `I built a demo with Grok ${version}.`),
+    post(`${version}-c`, `three-${version}`, `Testing Grok ${version} today.`),
+    post(`${version}-d`, `four-${version}`, `Our Grok ${version} integration is live.`),
+  ]);
+  const decisions = new Map(posts.map((item) => [item.id, {
+    rootLaunch: 0.1, publicAccess: 0.9, buildSurface: 0.9, builderDemo: 0.8, shippedArtifact: 0.8,
+  }]));
+  const clusters = discoverEventClusters(posts, decisions, { now });
+  assert.deepEqual(new Set(clusters.map((item) => item.key)), new Set(["grok 4.7", "grok 4.6"]));
+  for (const cluster of clusters) {
+    assert.ok(cluster.clusterPosts.every((item) => item.text.includes(cluster.key.replace("grok", "Grok"))));
+  }
 });
 
 test("merges two launch posts about the same product event", () => {

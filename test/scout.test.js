@@ -106,7 +106,7 @@ test("keeps decimal model versions intact and shows the stronger related signal"
   });
   const report = formatReport([{ launch, title: "Grok 4.7", builders: [], currentBuzz: [related] }], { now });
   assert.match(report, /Grok 4\.7 from SpaceXAI/);
-  assert.match(report, /10K-like related post/);
+  assert.match(report, /10K-like <https:\/\/x\.com\/someone\/status\/reaction\|related post>/);
 });
 
 test("keeps DocJev and Open-Jev as separate launches", () => {
@@ -124,6 +124,29 @@ test("keeps DocJev and Open-Jev as separate launches", () => {
   const decisions = new Map([[docJev.id, decision], [openJev.id, decision]]);
   const events = findFire([docJev, openJev], { now, decisions, requireDecisions: true });
   assert.deepEqual(new Set(events.map((event) => event.launch.id)), new Set(["docjev", "openjev"]));
+});
+
+test("a model release only uses same-version posts as buzz or builds", () => {
+  const launch = tweet({
+    id: "grok-47", author: "model-lab",
+    text: "Grok 4.7 is now available in our API.",
+    metrics: { likes: 1000, reposts: 100, replies: 20, quotes: 10, bookmarks: 100, views: 100_000 },
+  });
+  const older = tweet({
+    id: "older", author: "older-builder", text: "I built an app with Grok 4.6.",
+    metrics: { likes: 3000, reposts: 300, replies: 20, quotes: 10, bookmarks: 100, views: 100_000 },
+  });
+  const current = tweet({
+    id: "current", author: "new-builder", text: "I built an app with Grok 4.7.",
+    metrics: { likes: 250, reposts: 20, replies: 5, quotes: 2, bookmarks: 30, views: 30_000 },
+  });
+  const decision = { technologyType: "model_or_api", rootLaunch: 0.98, publicAccess: 0.95, buildSurface: 0.9, capabilityNovelty: 2 };
+  const builder = { builderDemo: 0.95, shippedArtifact: 0.95, commentary: 0 };
+  const [event] = findFire([launch, older, current], {
+    now, decisions: new Map([[launch.id, decision], [older.id, builder], [current.id, builder]]), requireDecisions: true,
+  });
+  assert.deepEqual(event.currentBuzz.map((post) => post.id), ["current"]);
+  assert.deepEqual(event.builders.map((post) => post.id), ["current"]);
 });
 
 test("does not mistake a benchmark follow-up for a root launch", () => {
