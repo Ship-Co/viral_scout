@@ -343,9 +343,13 @@ export function formatReport(items, options = {}) {
     day: "2-digit",
     month: "short",
   }).format(now);
-  if (items.length === 0) return `🔥 *Fire report · ${date}*\nNothing clearly catching fire in the last 24h.`;
+  const pulse = (options.pulse || []).slice(0, 3);
+  const pulseLine = pulse.length
+    ? `*Pulse:* ${pulse.map((clause) => `${slackText(clause.text)}${clause.post ? ` ${tweetLink(clause.post, "post")}` : ""}`).join("; ")}.`
+    : null;
+  if (items.length === 0) return [`🔥 *Fire report · ${date}*`, pulseLine, "Nothing clearly catching fire in the last 24h."].filter(Boolean).join("\n");
 
-  const lines = [`🔥 *Fire report · ${date}*`, "", "*Catching fire*"];
+  const lines = [`🔥 *Fire report · ${date}*`, ...(pulseLine ? [pulseLine] : []), "", "*Catching fire*"];
   for (const item of items) {
     const carryover = ageHours(item.launch, now) > 24
       ? ` · still spreading across ${new Set(item.currentBuzz.map((tweet) => tweet.author.toLowerCase())).size} hot posts today`

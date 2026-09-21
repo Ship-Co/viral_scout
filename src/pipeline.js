@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { verifyBuilderAssignments } from "./attribution.js";
+import { buildPulse } from "./pulse.js";
 import { discoverEventClusters, mergeFireItems } from "./clusters.js";
 import { findFire, formatReport, hasHealthyCoverage, selectClassificationCandidates } from "./scout.js";
 import { sendToSlack } from "./slack.js";
@@ -87,7 +88,7 @@ export async function runDailyScout(options = {}) {
     minAgeHours: config.minAgeHours,
     lookbackHours: config.lookbackHours,
     rootContextHours: config.rootContextHours,
-    maxItems: config.maxReportItems * 2,
+    maxItems: 20,
     decisions,
     requireDecisions: true,
   });
@@ -98,7 +99,8 @@ export async function runDailyScout(options = {}) {
   const candidates = mergeFireItems(sourceItems, clusterItems, config.maxReportItems);
   const attribution = await verifyBuilderAssignments(candidates);
   const items = attribution.items;
-  const report = formatReport(items, { now });
+  const pulse = buildPulse({ items, sourceItems, posts: allPosts, now });
+  const report = formatReport(items, { now, pulse });
 
   if (send && coverageHealthy && classificationHealthy) {
     await sendToSlack(report);

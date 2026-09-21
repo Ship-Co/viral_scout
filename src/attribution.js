@@ -2,7 +2,7 @@ import { launchProductNames } from "./scout.js";
 
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 
-function eventName(item) {
+export function eventName(item) {
   if (item.rootUnconfirmed) return item.title?.split(" — ")[0] || item.key || "unknown launch";
   const product = launchProductNames(item.launch)[0];
   if (!product) return item.title || "unknown launch";
