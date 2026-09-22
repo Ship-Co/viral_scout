@@ -168,6 +168,44 @@ test("keeps the maker's hot root post when a same-product thread confirms public
   assert.equal(findFire([root, access], options)[0].launch.id, root.id);
 });
 
+test("keeps a hot official model launch even when the announcement is a quote post", () => {
+  const launch = tweet({
+    id: "claude", author: "AnthropicAI", text: "Claude Opus 5.5 is available today.", isQuote: true,
+    metrics: { likes: 9700, reposts: 580, replies: 335, quotes: 202, bookmarks: 549, views: 485_000 },
+  });
+  const decision = {
+    technologyType: "model_or_api", roleConfidence: 0.78, rootLaunch: 0.83,
+    publicAccess: 0.91, buildSurface: 0.81, capabilityNovelty: 0.73,
+  };
+  const result = findFire([launch], {
+    now, decisions: new Map([[launch.id, decision]]),
+    launchHandles: new Set(["anthropicai"]), requireDecisions: true,
+  });
+  assert.equal(result[0].launch.id, launch.id);
+});
+
+test("deduplicates first-party and product-account posts for the same named model", () => {
+  const official = tweet({
+    id: "openai", author: "OpenAI",
+    text: "Please welcome GPT-6 Sol and GPT-6 Luna to the GPT-6 universe.",
+    metrics: { likes: 4700, reposts: 670, replies: 400, quotes: 460, bookmarks: 420, views: 128_000 },
+  });
+  const product = tweet({
+    id: "chatgpt", author: "ChatGPT",
+    text: "GPT-6 Sol and GPT-6 Luna, it’s your time to shine. Rolling out today.",
+    metrics: { likes: 800, reposts: 95, replies: 80, quotes: 38, bookmarks: 38, views: 18_000 },
+  });
+  const decision = {
+    technologyType: "model_or_api", roleConfidence: 0.95, rootLaunch: 0.97,
+    publicAccess: 0.82, buildSurface: 0.8, capabilityNovelty: 1.1,
+  };
+  const result = findFire([official, product], {
+    now, decisions: new Map([[official.id, decision], [product.id, decision]]),
+    launchHandles: new Set(["openai", "chatgpt"]), requireDecisions: true,
+  });
+  assert.deepEqual(result.map((item) => item.launch.id), [official.id]);
+});
+
 test("deduplicates a model launch and a router's same-version availability post", () => {
   const official = tweet({
     id: "official", author: "SpaceXAI", text: "Grok 4.7 is here. Available in the API.",

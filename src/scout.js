@@ -152,6 +152,15 @@ function productNames(tweet) {
 
 export function launchProductNames(tweet) {
   const text = tweet.text || "";
+  const modelPatterns = [
+    /\bGPT[- ]?\d+(?:\.\d+)?(?:\s+[A-Z][A-Za-z0-9-]+)?\b/g,
+    /\bGrok\s+\d+(?:\.\d+)?(?:\s+[A-Z][A-Za-z0-9-]+)?\b/g,
+    /\bClaude\s+(?:(?:Opus|Sonnet|Haiku|Fable|Mythos)\s+)?\d+(?:\.\d+)?\b/g,
+    /\bGemini\s+\d+(?:\.\d+)?(?:\s+[A-Z][A-Za-z0-9-]+)?\b/g,
+    /\bLlama\s+\d+(?:\.\d+)?\b/g,
+  ];
+  const modelNames = [...new Set(modelPatterns.flatMap((pattern) => text.match(pattern) || []))];
+  if (modelNames.length) return modelNames.slice(0, 3);
   const introduction = text.match(/\b(?:introducing|meet|launched|releasing|announcing)\s+([A-Z][A-Za-z0-9_-]{2,})\b/i);
   const selfBuilt = text.match(/\b(?:i|we)\s+(?:just\s+)?(?:built|shipped|released|launched|open[- ]sourced|made)\s+([A-Z][A-Za-z0-9_-]{2,})\b/i);
   const capitalized = productNames(tweet);
@@ -162,6 +171,7 @@ export function launchProductNames(tweet) {
 export function versionedProductName(tweet) {
   const name = launchProductNames(tweet)[0];
   if (!name) return null;
+  if (/\d/.test(name)) return name;
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return (tweet.text || "").match(new RegExp(`\\b${escaped}\\s+\\d+(?:\\.\\d+)+\\b`, "i"))?.[0] || null;
 }
@@ -185,7 +195,7 @@ function relatesBuilderToLaunch(builder, launch) {
   if (explicit) {
     const tool = explicit[1].toLowerCase();
     const filler = new Set(["a", "an", "the", "my", "our", "this", "new", "same", "app", "tool", "game", "demo", "prototype"]);
-    if (!filler.has(tool)) return launch.names.some((name) => name === tool) && relatesTo(builder, launch);
+    if (!filler.has(tool)) return launch.names.some((name) => name === tool || name.startsWith(`${tool} `)) && relatesTo(builder, launch);
   }
   return relatesTo(builder, launch);
 }
@@ -227,6 +237,13 @@ export function findFire(tweets, options = {}) {
         decision.buildSurface >= 0.3 &&
         (decision.capabilityNovelty >= 1.45 ||
           (decision.capabilityNovelty >= 1.2 && heatScore(tweet, now) >= 1.75));
+      const verifiedOfficialModelLaunch =
+        officialLaunchAccount &&
+        decision?.technologyType === "model_or_api" &&
+        decision.rootLaunch >= 0.8 &&
+        decision.roleConfidence >= 0.7 &&
+        decision.publicAccess >= 0.75 &&
+        decision.buildSurface >= 0.65;
       const product = versionedProductName(tweet) || launchProductNames(tweet)[0];
       const officialThreadAccess = officialLaunchAccount && decision?.rootLaunch >= 0.7 &&
         decision?.buildSurface >= 0.55 && reusableTechnology && product &&
@@ -248,8 +265,8 @@ export function findFire(tweets, options = {}) {
         age >= minAge &&
         age <= rootContextHours &&
         !tweet.isReply &&
-        !tweet.isQuote &&
-        (decision ? (semanticLaunch || officialThreadAccess) : rulesLaunch) &&
+        (!tweet.isQuote || verifiedOfficialModelLaunch) &&
+        (decision ? (semanticLaunch || officialThreadAccess || verifiedOfficialModelLaunch) : rulesLaunch) &&
         isActuallyHot(tweet, now)
       );
     })
