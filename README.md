@@ -40,7 +40,7 @@ npm run scout     # posts to Slack immediately
 
 ## Production loop
 
-Vercel calls `/api/tick` every 15 minutes. Each tick scans recent feeds, rotates through direct launch accounts, classifies newly discovered candidates, and updates persistent engagement history. At 20:00 Amsterdam the same endpoint runs a deep crawl and sends the daily report. Local-time checking handles daylight saving automatically and persistent state prevents duplicate reports.
+Vercel calls `/api/tick` every 15 minutes. Each tick scans recent feeds, rotates through direct launch accounts, classifies newly discovered candidates, and updates persistent engagement history. During the 20:00 Amsterdam hour the endpoint runs a deep crawl and sends the daily report. If source or Jev coverage is temporarily incomplete, the next 15-minute tick retries; persistent state prevents duplicate reports after a successful delivery. Local-time checking handles daylight saving automatically.
 
 Set `DIGEST_HOUR_AMSTERDAM` to change the local delivery hour. The default is `20`.
 

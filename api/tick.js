@@ -7,7 +7,18 @@ export default async function handler(request, response) {
     return;
   }
   try {
-    response.status(200).json(await runTick());
+    const result = await runTick();
+    console.info("fire-scout tick", JSON.stringify({
+      digest: result.digest,
+      sent: result.sent,
+      deliveryReason: result.deliveryReason,
+      collected: result.collected,
+      scanned: result.scanned,
+      sourceFailures: result.sourceFailures,
+      jevCoverage: result.jevCoverage,
+      jevCandidates: result.jevCandidates,
+    }));
+    response.status(200).json(result);
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });

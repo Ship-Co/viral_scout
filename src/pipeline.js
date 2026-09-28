@@ -68,7 +68,7 @@ export function isDigestWindow(now = new Date()) {
     minute: "2-digit",
     hour12: false,
   }).formatToParts(now).map((part) => [part.type, part.value]));
-  return Number(parts.hour) === config.digestHourAmsterdam && Number(parts.minute) < 15;
+  return Number(parts.hour) === config.digestHourAmsterdam;
 }
 
 export async function runDailyScout(options = {}) {
@@ -131,6 +131,13 @@ export async function runDailyScout(options = {}) {
     verifiedBuilders: attribution.accepted,
     builderVerificationHealthy: attribution.healthy,
     sent: send && coverageHealthy && classificationHealthy,
+    deliveryReason: !send
+      ? "sending-disabled"
+      : !coverageHealthy
+        ? "source-coverage-incomplete"
+        : !classificationHealthy
+          ? "jev-coverage-incomplete"
+          : "sent",
     coverageHealthy,
     classificationHealthy,
   };
